@@ -254,51 +254,117 @@
       </div>
     );
 
+    const Collapsible = ({ title, children, defaultOpen = false }) => {
+      const [isOpen, setIsOpen] = useState(defaultOpen);
+      return (
+        <div className="border-b border-stone-800 pb-3 mb-3">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full flex items-center justify-between text-amber-100 text-sm font-medium py-1"
+          >
+            <span>{title}</span>
+            <span className={`text-amber-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+            {children}
+          </div>
+        </div>
+      );
+    };
+
     const InfoPanel = ({ onClose }) => (
       <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
-        <div className="p-5">
+        <div className="p-5 pb-8">
           <div className="flex items-center justify-between mb-4">
             <span className="text-amber-200/80 text-sm">About Box Breathing</span>
             <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
           </div>
 
           <p className="text-amber-200/60 text-sm leading-relaxed mb-4">
-            Tactical breathing used by Navy SEALs to calm the nervous system. The 4-4-4-4 pattern activates
-            your parasympathetic response, reducing stress and improving focus.
+            Tactical breathing used by Navy SEALs to calm the nervous system and improve focus under pressure.
           </p>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-200/50 mb-4">
-            {['Reduces cortisol', 'Lowers heart rate', 'Better sleep', 'Mental clarity'].map((item, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <span className="text-amber-500">•</span>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-stone-800 pt-4 mb-4">
-            <h3 className="text-amber-100 text-sm font-medium mb-2">Tips</h3>
+          <Collapsible title="How It Works" defaultOpen={true}>
+            <p className="text-amber-200/50 text-xs mb-2">
+              The 4-4-4-4 pattern activates your parasympathetic nervous system, shifting from "fight or flight" to "rest and digest" mode.
+            </p>
             <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
-              {['Practice 3-5 min for stress relief', 'Use before bed or stressful situations', 'Keep breathing smooth and natural'].map((item, i) => (
-                <div key={i} className="flex items-center gap-1">
+              {['Reduces stress hormones (cortisol, adrenaline)', 'Lowers heart rate and blood pressure', 'Stimulates the vagus nerve', 'Increases heart rate variability (HRV)', 'Improves oxygen-CO2 balance'].map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-amber-500">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+
+          <Collapsible title="Scientific Facts">
+            <div className="grid grid-cols-1 gap-2 text-xs text-amber-200/50">
+              {[
+                'Used by Navy SEALs, first responders, and athletes',
+                'Studies show 5 min reduces anxiety by up to 44%',
+                'Activates the vagus nerve (cranial nerve X)',
+                'Increases GABA, the calming neurotransmitter',
+                'Shown to lower cortisol levels within minutes',
+                'Improves cognitive performance under stress',
+                'Can lower blood pressure by 10-15 points'
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-amber-500 mt-0.5">→</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+
+          <Collapsible title="When to Use">
+            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
+              {[
+                'Before sleep to calm racing thoughts',
+                'During anxiety or panic attacks',
+                'Before presentations or interviews',
+                'After intense exercise or workouts',
+                'When feeling overwhelmed at work',
+                'Before making important decisions',
+                'To reset after arguments or conflict'
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-amber-500">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+
+          <Collapsible title="Best Practices">
+            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
+              {[
+                'Practice 3-5 minutes for immediate relief',
+                'Find a quiet, comfortable position',
+                'Breathe through your nose if possible',
+                'Keep shoulders relaxed, not raised',
+                'Focus on your diaphragm expanding',
+                'Don\'t force it - keep it natural',
+                'Consistency beats intensity - daily is best'
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-amber-500">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+
+          <Collapsible title="Controls">
+            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
+              {['Tap the circle to start or pause', 'Pull down to reset session', 'Complete 4+ cycles to mark day as done', 'Settings gear to customize patterns'].map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
                   <span className="text-amber-500">→</span>
                   <span>{item}</span>
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="border-t border-stone-800 pt-4">
-            <h3 className="text-amber-100 text-sm font-medium mb-2">Controls</h3>
-            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
-              {['Tap circle to start/pause', 'Pull down to reset', '4+ cycles = day complete'].map((item, i) => (
-                <div key={i} className="flex items-center gap-1">
-                  <span className="text-amber-500">→</span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          </Collapsible>
         </div>
       </div>
     );
@@ -329,9 +395,26 @@
         return { completed, streak };
       }, [history]);
 
+      const particles = useMemo(() => {
+        return days.map((dateKey, i) => {
+          const angle = (i / days.length) * Math.PI * 12 + Math.random() * 0.5;
+          const radius = 15 + (i / days.length) * 35 + Math.random() * 8;
+          const x = 50 + Math.cos(angle) * radius;
+          const y = 50 + Math.sin(angle) * radius;
+          const cycles = history[dateKey] || 0;
+          const isCompleted = cycles >= CYCLES_TO_COMPLETE;
+          const isMissed = !isCompleted && dateKey !== today;
+          const isTodayDate = dateKey === today;
+          return {
+            dateKey, x: Math.max(5, Math.min(95, x)), y: Math.max(5, Math.min(95, y)),
+            completed: isCompleted, missed: isMissed, isToday: isTodayDate, delay: (i % 30) * 0.1
+          };
+        });
+      }, [days, history, today]);
+
       return (
         <div className="relative">
-          <div className="flex justify-center gap-8 mb-4">
+          <div className="flex justify-center gap-8 mb-3">
             <div className="text-center">
               <div className="text-2xl text-amber-400 font-light">{stats.streak}</div>
               <div className="text-xs text-amber-200/40 uppercase tracking-wider">Streak</div>
@@ -342,39 +425,71 @@
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1 justify-center">
-            {days.slice(-90).map((dateKey) => {
-              const cycles = history[dateKey] || 0;
-              const isCompleted = cycles >= CYCLES_TO_COMPLETE;
-              const isToday = dateKey === today;
+          <div className="relative w-full h-40 rounded-lg overflow-hidden bg-stone-900/50">
+            <div
+              className="absolute inset-0 opacity-30"
+              style={{ background: 'radial-gradient(ellipse at 50% 50%, #d97706 0%, transparent 70%)' }}
+            />
+            {particles.map((p, i) => {
+              const size = p.completed ? 6 : p.missed ? 3 : 4;
               return (
                 <div
-                  key={dateKey}
-                  className="w-2 h-2 rounded-sm"
+                  key={p.dateKey}
+                  className="absolute rounded-full"
                   style={{
-                    backgroundColor: isCompleted ? '#d97706' : '#292524',
-                    boxShadow: isCompleted ? '0 0 4px #d97706' : 'none',
-                    border: isToday ? '1px solid #fbbf24' : 'none'
+                    left: `${p.x}%`,
+                    top: `${p.y}%`,
+                    width: `${size}px`,
+                    height: `${size}px`,
+                    transform: 'translate(-50%, -50%)',
+                    backgroundColor: p.completed ? '#d97706' : p.missed ? '#44403c' : '#78350f',
+                    opacity: p.completed ? 0.9 : p.missed ? 0.3 : 0.5,
+                    boxShadow: p.completed ? '0 0 8px #d97706' : 'none',
+                    border: p.isToday ? '2px solid #fbbf24' : 'none',
+                    animation: p.completed ? `particlePulse ${2 + (i % 2)}s ease-in-out infinite ${p.delay * 0.5}s` : 'none'
                   }}
                 />
               );
             })}
           </div>
+
           <div className="flex items-center justify-center gap-4 mt-2 text-xs text-amber-200/30">
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-amber-600" />
+              <div className="w-2 h-2 rounded-full bg-amber-600 shadow-lg shadow-amber-600/50" />
               <span>Done</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-stone-800" />
+              <div className="w-1.5 h-1.5 rounded-full bg-stone-600" />
               <span>Missed</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full border border-amber-400 bg-transparent" />
+              <span>Today</span>
             </div>
           </div>
         </div>
       );
     };
 
-    const SettingsPanel = ({ soundEnabled, setSoundEnabled, hapticEnabled, setHapticEnabled, preset, handlePresetChange, durations, setDurations, history, onClose }) => (
+    const SettingsPanel = ({ soundEnabled, setSoundEnabled, hapticEnabled, setHapticEnabled, notificationsEnabled, setNotificationsEnabled, reminderTime, setReminderTime, preset, handlePresetChange, durations, setDurations, history, onClose }) => {
+      const handleNotificationToggle = async (enabled) => {
+        if (enabled) {
+          if (!('Notification' in window)) {
+            alert('Notifications not supported on this device');
+            return;
+          }
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            setNotificationsEnabled(true);
+          } else {
+            alert('Please enable notifications in your browser settings');
+          }
+        } else {
+          setNotificationsEnabled(false);
+        }
+      };
+
+      return (
       <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
         <div className="p-5">
           <div className="flex items-center justify-between mb-4">
@@ -385,6 +500,25 @@
           <section className="mb-4 pb-4 border-b border-stone-800">
             <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Your Year</h3>
             <YearOverview history={history} />
+          </section>
+
+          <section className="mb-4 pb-4 border-b border-stone-800">
+            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Reminders</h3>
+            <Toggle enabled={notificationsEnabled} onChange={handleNotificationToggle} label="Daily Reminder" icon="🔔" />
+            {notificationsEnabled && (
+              <div className="flex items-center justify-between py-2">
+                <span className="text-amber-200/70 flex items-center gap-2">
+                  <span>⏰</span>
+                  <span>Reminder Time</span>
+                </span>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => setReminderTime(e.target.value)}
+                  className="bg-stone-800 border border-stone-700 rounded-lg px-2 py-1 text-amber-200 text-sm focus:outline-none focus:border-amber-700"
+                />
+              </div>
+            )}
           </section>
 
           <section className="mb-4 pb-4 border-b border-stone-800">
@@ -433,6 +567,7 @@
         </div>
       </div>
     );
+    };
 
     function BreathingApp() {
       const [showSplash, setShowSplash] = useState(true);
@@ -449,17 +584,81 @@
       const [pullDistance, setPullDistance] = useState(0);
       const [showResetHint, setShowResetHint] = useState(false);
       const [history, setHistory] = useState({});
-      
+      const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+      const [reminderTime, setReminderTime] = useState('21:00');
+
       const audioContextRef = useRef(null);
       const intervalRef = useRef(null);
+      const notificationTimerRef = useRef(null);
       const touchStartY = useRef(0);
 
       useEffect(() => {
         try {
           const saved = localStorage.getItem('breathing-history');
           if (saved) setHistory(JSON.parse(saved));
+          const notifSettings = localStorage.getItem('breathing-notifications');
+          if (notifSettings) {
+            const { enabled, time } = JSON.parse(notifSettings);
+            setNotificationsEnabled(enabled);
+            setReminderTime(time || '21:00');
+          }
         } catch (e) {}
       }, []);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('breathing-notifications', JSON.stringify({
+            enabled: notificationsEnabled,
+            time: reminderTime
+          }));
+        } catch (e) {}
+
+        if (notificationTimerRef.current) {
+          clearTimeout(notificationTimerRef.current);
+        }
+
+        if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+          const scheduleNotification = () => {
+            const now = new Date();
+            const [hours, minutes] = reminderTime.split(':').map(Number);
+            const target = new Date();
+            target.setHours(hours, minutes, 0, 0);
+
+            if (target <= now) {
+              target.setDate(target.getDate() + 1);
+            }
+
+            const delay = target - now;
+
+            notificationTimerRef.current = setTimeout(() => {
+              const todayKey = getDateKey();
+              const todayCycles = history[todayKey] || 0;
+              if (todayCycles < CYCLES_TO_COMPLETE) {
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                  navigator.serviceWorker.controller.postMessage({
+                    type: 'SHOW_NOTIFICATION',
+                    body: 'Time for your daily breathing session'
+                  });
+                } else {
+                  new Notification('Tactical Breathing', {
+                    body: 'Time for your daily breathing session',
+                    icon: '/icon-192.svg'
+                  });
+                }
+              }
+              scheduleNotification();
+            }, delay);
+          };
+
+          scheduleNotification();
+        }
+
+        return () => {
+          if (notificationTimerRef.current) {
+            clearTimeout(notificationTimerRef.current);
+          }
+        };
+      }, [notificationsEnabled, reminderTime, history]);
 
       const saveHistory = useCallback((newHistory) => {
         setHistory(newHistory);
@@ -618,7 +817,7 @@
 
       return (
         <div 
-          className="min-h-screen bg-stone-950 text-amber-100 flex flex-col items-center justify-between p-4 py-8 overflow-hidden select-none"
+          className="min-h-screen bg-stone-950 text-amber-100 flex flex-col items-center justify-between p-4 pt-6 pb-16 overflow-hidden select-none"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -638,6 +837,8 @@
             <SettingsPanel
               soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
               hapticEnabled={hapticEnabled} setHapticEnabled={setHapticEnabled}
+              notificationsEnabled={notificationsEnabled} setNotificationsEnabled={setNotificationsEnabled}
+              reminderTime={reminderTime} setReminderTime={setReminderTime}
               preset={preset} handlePresetChange={handlePresetChange}
               durations={durations} setDurations={setDurations}
               history={history}
