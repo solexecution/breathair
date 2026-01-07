@@ -13,6 +13,13 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
   <style>
     body { 
       margin: 0; 
@@ -249,104 +256,151 @@
 
     const InfoPanel = ({ onClose }) => (
       <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
-        <div className="min-h-screen p-5 pb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <span className="text-amber-200/80 text-sm">About Box Breathing</span>
-            </div>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-amber-200/80 text-sm">About Box Breathing</span>
             <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
           </div>
 
-          <section className="mb-8">
-            <h2 className="text-amber-100 font-medium mb-3">What is Box Breathing?</h2>
-            <p className="text-amber-200/60 text-sm leading-relaxed">
-              Box breathing (tactical breathing) is a powerful stress-reduction technique used by Navy SEALs 
-              and military personnel to calm the nervous system and improve focus under pressure.
-            </p>
-          </section>
+          <p className="text-amber-200/60 text-sm leading-relaxed mb-4">
+            Tactical breathing used by Navy SEALs to calm the nervous system. The 4-4-4-4 pattern activates
+            your parasympathetic response, reducing stress and improving focus.
+          </p>
 
-          <section className="mb-8">
-            <h2 className="text-amber-100 font-medium mb-3">How It Works</h2>
-            <p className="text-amber-200/60 text-sm leading-relaxed mb-4">
-              The 4-4-4-4 pattern activates your parasympathetic nervous system, shifting your body from 
-              "fight or flight" to "rest and digest" mode. This:
-            </p>
-            <ul className="space-y-3">
-              {['Reduces stress hormones (cortisol)', 'Lowers heart rate and blood pressure', 'Stimulates the vagus nerve', 'Improves sleep quality', 'Enhances mental clarity'].map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-amber-200/60 text-sm">
-                  <span className="text-amber-500 mt-1">→</span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-200/50 mb-4">
+            {['Reduces cortisol', 'Lowers heart rate', 'Better sleep', 'Mental clarity'].map((item, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <span className="text-amber-500">•</span>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-stone-800 pt-4 mb-4">
+            <h3 className="text-amber-100 text-sm font-medium mb-2">Tips</h3>
+            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
+              {['Practice 3-5 min for stress relief', 'Use before bed or stressful situations', 'Keep breathing smooth and natural'].map((item, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-amber-500">→</span>
                   <span>{item}</span>
-                </li>
+                </div>
               ))}
-            </ul>
-          </section>
+            </div>
+          </div>
 
-          <section className="mb-8">
-            <h2 className="text-amber-100 font-medium mb-3">Best Practices</h2>
-            <ul className="space-y-3">
-              {['Practice 3-5 minutes for stress relief', 'Use before bed for better sleep', 'Find a quiet, comfortable space', 'Keep your breathing smooth and natural', 'Focus on the rhythm, not perfection'].map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-amber-200/60 text-sm">
-                  <span className="text-amber-500 mt-1">→</span>
+          <div className="border-t border-stone-800 pt-4">
+            <h3 className="text-amber-100 text-sm font-medium mb-2">Controls</h3>
+            <div className="grid grid-cols-1 gap-1 text-xs text-amber-200/50">
+              {['Tap circle to start/pause', 'Pull down to reset', '4+ cycles = day complete'].map((item, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="text-amber-500">→</span>
                   <span>{item}</span>
-                </li>
+                </div>
               ))}
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-amber-100 font-medium mb-3">When to Use</h2>
-            <ul className="space-y-3">
-              {['Before sleep to calm racing thoughts', 'During stressful situations or anxiety', 'Before important meetings or presentations', 'After intense physical activity', 'Anytime you need to reset mentally'].map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-amber-200/60 text-sm">
-                  <span className="text-amber-500 mt-1">→</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-amber-100 font-medium mb-3">Controls</h2>
-            <ul className="space-y-3">
-              {['Tap the circle to start or pause', 'Pull down to reset', 'Complete 4+ cycles to mark day as done'].map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-amber-200/60 text-sm">
-                  <span className="text-amber-500 mt-1">→</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <button onClick={onClose} className="w-full py-3 rounded-full bg-amber-900/50 text-amber-200 border border-amber-700/50">
-            Start Breathing
-          </button>
+            </div>
+          </div>
         </div>
       </div>
     );
 
-    const SettingsPanel = ({ soundEnabled, setSoundEnabled, hapticEnabled, setHapticEnabled, preset, handlePresetChange, durations, setDurations, onClose }) => (
+    const YearOverview = ({ history }) => {
+      const days = useMemo(() => getLastNDays(365), []);
+      const today = getDateKey();
+
+      const stats = useMemo(() => {
+        let completed = 0;
+        let streak = 0;
+        let countingStreak = true;
+
+        for (let i = 0; i < 365; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const key = getDateKey(date);
+          const cycles = history[key] || 0;
+
+          if (cycles >= CYCLES_TO_COMPLETE) {
+            completed++;
+            if (countingStreak) streak++;
+          } else if (countingStreak && i > 0) {
+            countingStreak = false;
+          }
+        }
+
+        return { completed, streak };
+      }, [history]);
+
+      return (
+        <div className="relative">
+          <div className="flex justify-center gap-8 mb-4">
+            <div className="text-center">
+              <div className="text-2xl text-amber-400 font-light">{stats.streak}</div>
+              <div className="text-xs text-amber-200/40 uppercase tracking-wider">Streak</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl text-amber-400 font-light">{stats.completed}</div>
+              <div className="text-xs text-amber-200/40 uppercase tracking-wider">Days</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1 justify-center">
+            {days.slice(-90).map((dateKey) => {
+              const cycles = history[dateKey] || 0;
+              const isCompleted = cycles >= CYCLES_TO_COMPLETE;
+              const isToday = dateKey === today;
+              return (
+                <div
+                  key={dateKey}
+                  className="w-2 h-2 rounded-sm"
+                  style={{
+                    backgroundColor: isCompleted ? '#d97706' : '#292524',
+                    boxShadow: isCompleted ? '0 0 4px #d97706' : 'none',
+                    border: isToday ? '1px solid #fbbf24' : 'none'
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-2 text-xs text-amber-200/30">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-amber-600" />
+              <span>Done</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-stone-800" />
+              <span>Missed</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const SettingsPanel = ({ soundEnabled, setSoundEnabled, hapticEnabled, setHapticEnabled, preset, handlePresetChange, durations, setDurations, history, onClose }) => (
       <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
-        <div className="min-h-screen p-5 pb-12">
-          <div className="flex items-center justify-between mb-6">
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
             <span className="text-amber-200/80">Settings</span>
             <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
           </div>
 
-          <section className="mb-6 pb-4 border-b border-stone-800">
-            <h3 className="text-sm font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Feedback</h3>
+          <section className="mb-4 pb-4 border-b border-stone-800">
+            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Your Year</h3>
+            <YearOverview history={history} />
+          </section>
+
+          <section className="mb-4 pb-4 border-b border-stone-800">
+            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Feedback</h3>
             <Toggle enabled={soundEnabled} onChange={setSoundEnabled} label="Sound" icon="🔊" />
             <Toggle enabled={hapticEnabled} onChange={setHapticEnabled} label="Haptic" icon="📳" />
           </section>
 
-          <section className="mb-6">
-            <h3 className="text-sm font-medium mb-4 text-amber-200/50 uppercase tracking-wider">Breathing Pattern</h3>
-            <div className="grid grid-cols-2 gap-2 mb-6">
+          <section className="mb-4 pb-4 border-b border-stone-800">
+            <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Pattern</h3>
+            <div className="grid grid-cols-2 gap-2">
               {Object.entries(PRESETS).map(([key, value]) => (
                 <button
                   key={key}
                   onClick={() => handlePresetChange(key)}
-                  className={`p-3 rounded-lg text-sm transition-all ${preset === key ? 'bg-amber-900/50 text-amber-200 border border-amber-700/50' : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700 border border-transparent'}`}
+                  className={`p-2 rounded-lg text-xs transition-all ${preset === key ? 'bg-amber-900/50 text-amber-200 border border-amber-700/50' : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700 border border-transparent'}`}
                 >
                   {value.name}
                 </button>
@@ -354,9 +408,9 @@
             </div>
           </section>
 
-          <section className="mb-8">
-            <h3 className="text-sm text-amber-200/40 mb-3 uppercase tracking-wider">Custom Durations (seconds)</h3>
-            <div className="grid grid-cols-4 gap-3">
+          <section>
+            <h3 className="text-xs text-amber-200/40 mb-2 uppercase tracking-wider">Custom (seconds)</h3>
+            <div className="grid grid-cols-4 gap-2">
               {PHASES.map((p, i) => (
                 <div key={i} className="text-center">
                   <label className="text-xs text-amber-200/30 block mb-1">{p.name}</label>
@@ -370,16 +424,12 @@
                       newDurations[i] = parseInt(e.target.value) || 0;
                       setDurations(newDurations);
                     }}
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-center text-amber-200 focus:outline-none focus:border-amber-700"
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-center text-amber-200 text-sm focus:outline-none focus:border-amber-700"
                   />
                 </div>
               ))}
             </div>
           </section>
-
-          <button onClick={onClose} className="w-full py-3 rounded-full bg-amber-900/50 text-amber-200 border border-amber-700/50">
-            Done
-          </button>
         </div>
       </div>
     );
@@ -451,7 +501,12 @@
 
       const vibrate = useCallback((pattern) => {
         if (!hapticEnabled) return;
-        if (navigator.vibrate) navigator.vibrate(pattern);
+        try {
+          if ('vibrate' in navigator) {
+            navigator.vibrate(0);
+            navigator.vibrate(pattern);
+          }
+        } catch (e) {}
       }, [hapticEnabled]);
 
       const triggerPhaseFeedback = useCallback((phase) => {
@@ -538,6 +593,11 @@
       const progress = timeInPhase / phaseDuration;
       const phase = PHASES[currentPhase];
       const todayCompleted = (history[getDateKey()] || 0) >= CYCLES_TO_COMPLETE;
+
+      const totalCycleDuration = durations.reduce((a, b) => a + b, 0);
+      const completedPhasesTime = durations.slice(0, currentPhase).reduce((a, b) => a + b, 0);
+      const currentCycleProgress = (completedPhasesTime + timeInPhase) / totalCycleDuration;
+      const sessionProgress = ((cycleCount + currentCycleProgress) / CYCLES_TO_COMPLETE) * 100;
       
       const getCircleScale = () => {
         if (!isRunning) return 0.6;
@@ -580,6 +640,7 @@
               hapticEnabled={hapticEnabled} setHapticEnabled={setHapticEnabled}
               preset={preset} handlePresetChange={handlePresetChange}
               durations={durations} setDurations={setDurations}
+              history={history}
               onClose={() => setShowSettings(false)}
             />
           )}
@@ -646,11 +707,32 @@
 
           <div className="w-full max-w-xs text-center">
             <p className="text-lg text-amber-200/60 mb-1">{phase.instruction}</p>
-            <p className="text-amber-200/30 text-sm">
+            <p className="text-amber-200/30 text-sm mb-4">
               {cycleCount > 0 || isRunning ? (
-                <>Cycle {cycleCount + 1}{todayCompleted && <span className="ml-2 text-amber-500">✓</span>}</>
+                <>Cycle {cycleCount + 1} of {CYCLES_TO_COMPLETE}{todayCompleted && <span className="ml-2 text-amber-500">✓</span>}</>
               ) : 'Pull down to reset'}
             </p>
+
+            <div className="w-full">
+              <div className="flex justify-between text-xs text-amber-200/40 mb-1">
+                <span>Session Progress</span>
+                <span>{Math.min(100, Math.round(sessionProgress))}%</span>
+              </div>
+              <div className="h-2 bg-stone-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-700 to-amber-500 transition-all duration-100 ease-linear rounded-full"
+                  style={{ width: `${Math.min(100, sessionProgress)}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-1">
+                {[...Array(CYCLES_TO_COMPLETE)].map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all ${i < cycleCount ? 'bg-amber-500' : i === cycleCount && isRunning ? 'bg-amber-700 animate-pulse' : 'bg-stone-700'}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       );
