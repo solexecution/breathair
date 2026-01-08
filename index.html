@@ -167,7 +167,7 @@
       customDurations: [4, 4, 4, 4],
       defaultCycles: 4,
       gesturesEnabled: true,
-      ppg: { enabled: false }
+      ppg: { enabled: true }
     };
 
     const DEFAULT_STREAKS = {
@@ -1495,10 +1495,14 @@
               videoRef.current.srcObject = stream;
               await videoRef.current.play();
               console.log('[PPG] Video playing, starting analysis loop');
+              videoRef.current.addEventListener('loadedmetadata', () => {
+                console.log('[PPG] Video metadata loaded, dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
+              });
               analyze();
             }
           } catch (err) {
-            console.error('[PPG] Camera access denied:', err);
+            console.error('[PPG] Camera access ERROR:', err.name, err.message);
+            alert('PPG Camera Error: ' + err.message + '\n\nPlease allow camera access in your browser settings.');
           }
         };
 
@@ -1610,8 +1614,8 @@
 
         const brightness = (r + g + b) / 3;
 
-        // More forgiving finger detection - just needs good brightness and red dominance
-        const fingerDetected = brightness > 80 && brightness < 200 && r > 100;
+        // VERY forgiving finger detection - just needs decent brightness
+        const fingerDetected = brightness > 60 && brightness < 220 && r > 80;
 
         // Update debug info every frame
         setDebugInfo({
@@ -1626,6 +1630,11 @@
           console.log('[PPG] RGB:', Math.round(r), Math.round(g), Math.round(b),
                       'Brightness:', Math.round(brightness), 'Finger:', fingerDetected,
                       'Samples:', samplesRef.current.length);
+        }
+
+        // Log when finger detection state changes
+        if (fingerDetected !== fingerOn) {
+          console.log('[PPG] Finger detection changed:', fingerDetected ? 'DETECTED' : 'LOST');
         }
 
         setFingerOn(fingerDetected);
@@ -1695,12 +1704,13 @@
           <div className="flex items-center gap-4">
             {/* Camera preview - LARGER */}
             <div className="relative flex-shrink-0">
-              <div className={`w-24 h-24 rounded-2xl overflow-hidden border-3 ${fingerOn ? 'border-red-500 shadow-lg shadow-red-500/30' : 'border-stone-600'} transition-all duration-300`}>
+              <div className={`w-24 h-24 rounded-2xl overflow-hidden border-3 ${fingerOn ? 'border-red-500 shadow-lg shadow-red-500/30' : 'border-stone-600'} transition-all duration-300 bg-black`}>
                 <video
                   ref={videoRef}
-                  className="w-full h-full object-cover scale-x-[-1]"
+                  className="w-full h-full object-cover scale-x-[-1] bg-black"
                   playsInline
                   muted
+                  autoPlay
                 />
               </div>
               {fingerOn && !calibrating && (
@@ -1759,14 +1769,19 @@
           </div>
 
           {/* Debug RGB values */}
-          <div className="mt-3 pt-3 border-t border-stone-700/50 flex items-center justify-between text-[9px] font-mono">
-            <div>
-              <span className="text-red-400">R:{debugInfo.r}</span>
-              <span className="text-green-400 ml-2">G:{debugInfo.g}</span>
-              <span className="text-blue-400 ml-2">B:{debugInfo.b}</span>
+          <div className="mt-3 pt-3 border-t border-stone-700/50 text-[9px] font-mono space-y-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-red-400">R:{debugInfo.r}</span>
+                <span className="text-green-400 ml-2">G:{debugInfo.g}</span>
+                <span className="text-blue-400 ml-2">B:{debugInfo.b}</span>
+              </div>
+              <div className="text-amber-200/40">
+                Brightness: {debugInfo.brightness}
+              </div>
             </div>
             <div className="text-amber-200/40">
-              Brightness: {debugInfo.brightness}
+              Samples: {samplesRef.current.length} / {calibrating ? 'Calibrating' : 'Ready'}
             </div>
           </div>
         </div>
