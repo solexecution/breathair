@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -7,16 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0c0a09">
   <title>Tactical Breathing</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.28.5/babel.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg">
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').catch(() => { });
       });
     }
   </script>
@@ -27,18 +28,22 @@
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
+
     /* Wave grid splash screen */
     .wave-container {
       perspective: 800px;
     }
+
     .wave-grid {
       display: grid;
       transform-style: preserve-3d;
     }
+
     .wave-dot {
       border-radius: 50%;
       transform-style: preserve-3d;
     }
+
     .wave-dot.today::after {
       content: '';
       position: absolute;
@@ -51,26 +56,41 @@
       border-radius: 50%;
       animation: today-pulse 1.5s ease-out infinite;
     }
+
     @keyframes today-pulse {
-      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+      0% {
+        transform: translate(-50%, -50%) scale(0.6);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0;
+      }
     }
+
     /* Reduced motion support */
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
+
+      *,
+      *::before,
+      *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
     }
+
     /* Focus visible for keyboard navigation */
     *:focus-visible {
       outline: 2px solid #d97706;
       outline-offset: 2px;
     }
+
     button:focus:not(:focus-visible) {
       outline: none;
     }
+
     /* Screen reader only text */
     .sr-only {
       position: absolute;
@@ -83,22 +103,26 @@
       white-space: nowrap;
       border: 0;
     }
+
     /* Dynamic viewport height for mobile */
     .h-dvh {
       height: 100vh;
       height: 100dvh;
     }
+
     /* Responsive breathing circle */
     .breathing-circle {
       width: 14rem;
       height: 14rem;
     }
+
     @media (min-height: 700px) {
       .breathing-circle {
         width: 16rem;
         height: 16rem;
       }
     }
+
     @media (max-height: 600px) {
       .breathing-circle {
         width: 11rem;
@@ -107,6 +131,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="root"></div>
   <script type="text/babel">
@@ -168,21 +193,21 @@
     const saveSettings = (settings) => {
       try {
         localStorage.setItem('breathing-settings', JSON.stringify(settings));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const loadHistory = () => {
       try {
         const saved = localStorage.getItem('breathing-history');
         if (saved) return JSON.parse(saved);
-      } catch (e) {}
+      } catch (e) { }
       return {};
     };
 
     const saveHistory = (history) => {
       try {
         localStorage.setItem('breathing-history', JSON.stringify(history));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const loadSessions = () => {
@@ -196,14 +221,14 @@
           const filtered = (parsed.sessions || []).filter(s => new Date(s.date) >= cutoff);
           return { version: 1, sessions: filtered };
         }
-      } catch (e) {}
+      } catch (e) { }
       return { version: 1, sessions: [] };
     };
 
     const saveSessions = (sessions) => {
       try {
         localStorage.setItem('breathing-sessions', JSON.stringify(sessions));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const MIN_SESSION_DURATION = 60; // Minimum 1 minute to count as a session
@@ -228,14 +253,14 @@
       try {
         const saved = localStorage.getItem('breathing-streaks');
         if (saved) return { ...DEFAULT_STREAKS, ...JSON.parse(saved) };
-      } catch (e) {}
+      } catch (e) { }
       return { ...DEFAULT_STREAKS };
     };
 
     const saveStreaks = (streaks) => {
       try {
         localStorage.setItem('breathing-streaks', JSON.stringify(streaks));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     const updateStreaks = (history) => {
@@ -326,42 +351,16 @@
       return Math.floor(diff / oneDay);
     };
 
-    const SplashScreen = ({ history, onComplete }) => {
+    const WaveGrid = ({ history, onComplete, isInteractive = true, height = '100%' }) => {
       const containerRef = useRef(null);
       const gridRef = useRef(null);
-      const dotsRef = useRef([]);
       const timeRef = useRef(0);
       const animationRef = useRef(null);
       const [gridConfig, setGridConfig] = useState({ cols: 20, dotSize: 10, gap: 5 });
 
       const today = new Date();
       const todayDayOfYear = getDayOfYear(today);
-      const todayKey = getDateKey();
 
-      // Calculate stats
-      const stats = useMemo(() => {
-        let completed = 0;
-        let streak = 0;
-        let countingStreak = true;
-
-        for (let i = 0; i < 365; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const key = getDateKey(date);
-          const cycles = history[key] || 0;
-
-          if (cycles >= CYCLES_TO_COMPLETE) {
-            completed++;
-            if (countingStreak) streak++;
-          } else if (countingStreak && i > 0) {
-            countingStreak = false;
-          }
-        }
-
-        return { completed, streak };
-      }, [history]);
-
-      // Build dots data
       const dotsData = useMemo(() => {
         return Array.from({ length: 365 }, (_, i) => {
           const dayNumber = i + 1;
@@ -378,9 +377,8 @@
             cycles
           };
         });
-      }, [history, todayDayOfYear, today]);
+      }, [history, todayDayOfYear, today.getFullYear()]);
 
-      // Calculate grid dimensions - matching original 365-wave.html
       const calculateGrid = useCallback(() => {
         if (!containerRef.current) return;
         const w = containerRef.current.clientWidth - 32;
@@ -406,15 +404,18 @@
         setGridConfig({ cols: bestCols, dotSize, gap });
       }, []);
 
-      // Setup and resize
       useEffect(() => {
         calculateGrid();
         window.addEventListener('resize', calculateGrid);
         return () => window.removeEventListener('resize', calculateGrid);
       }, [calculateGrid]);
 
-      // Wave animation - following original 365-wave.html design
       useEffect(() => {
+        const canvas = gridRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
         const waveSpeed = 0.025;
         const waveAmplitude = 18;
         const waveFrequencyX = 0.15;
@@ -423,13 +424,22 @@
         const animate = () => {
           timeRef.current += waveSpeed;
 
-          dotsRef.current.forEach((dotEl, index) => {
-            if (!dotEl) return;
-            const dot = dotsData[index];
+          const rows = Math.ceil(365 / gridConfig.cols);
+          const width = gridConfig.cols * (gridConfig.dotSize + gridConfig.gap) - gridConfig.gap;
+          const height = rows * (gridConfig.dotSize + gridConfig.gap) - gridConfig.gap;
+
+          if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          }
+
+          ctx.clearRect(0, 0, width, height);
+
+          dotsData.forEach((dot, index) => {
             const row = Math.floor(index / gridConfig.cols);
             const col = index % gridConfig.cols;
 
-            // Same wave calculation for ALL dots
             const wave1 = Math.sin(col * waveFrequencyX + timeRef.current) * waveAmplitude;
             const wave2 = Math.sin(row * waveFrequencyY + timeRef.current * 0.7) * (waveAmplitude * 0.5);
             const wave3 = Math.sin((col + row) * 0.1 + timeRef.current * 1.3) * (waveAmplitude * 0.3);
@@ -438,44 +448,50 @@
             const scale = 1 + (z / 150);
             const brightness = 0.5 + (z + waveAmplitude * 2) / (waveAmplitude * 8);
 
-            // Same transform for all dots - unified wave motion
-            dotEl.style.transform = `translateZ(${z}px) scale(${scale})`;
+            const x = col * (gridConfig.dotSize + gridConfig.gap) + gridConfig.dotSize / 2;
+            const y = row * (gridConfig.dotSize + gridConfig.gap) + gridConfig.dotSize / 2;
+            const currentSize = (gridConfig.dotSize / 2) * scale;
+
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(0.5, currentSize), 0, Math.PI * 2);
+
+            let fillStyle;
+            let opacity = 1;
 
             if (dot.isToday) {
-              // Gold highlight for today
-              dotEl.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 235, 150, 0.95), rgba(255, 200, 50, 0.8))';
-              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.4}px rgba(255, 215, 0, 0.4)`;
-              dotEl.style.opacity = '0.9';
+              fillStyle = '#ffd700';
+              opacity = 0.9;
+              const pulse = (Math.sin(timeRef.current * 5) + 1) / 2;
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(x, y, currentSize * (1.2 + pulse * 0.4), 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(255, 215, 0, ${0.6 * (1 - pulse)})`;
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+              ctx.restore();
             } else if (dot.isCompleted) {
-              // Warm amber for completed days
               const hue = 35 + Math.sin(timeRef.current + row * 0.1) * 10;
-              const saturation = 70 + z * 0.3;
-              const lightness = 55 + z * 0.4;
-              dotEl.style.background = `radial-gradient(circle at 30% 30%,
-                hsla(${hue}, ${saturation}%, ${lightness + 15}%, ${0.6 + brightness * 0.3}),
-                hsla(${hue}, ${saturation + 10}%, ${lightness - 5}%, ${0.4 + brightness * 0.3}))`;
-              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.3}px hsla(${hue}, 70%, 60%, ${brightness * 0.3})`;
-              dotEl.style.opacity = `${0.5 + brightness * 0.4}`;
+              fillStyle = `hsla(${hue}, 70%, 55%, ${0.6 + brightness * 0.3})`;
+              opacity = 0.5 + brightness * 0.4;
             } else if (dot.isFuture) {
-              // Dim muted colors for future days
               const hue = 220 + (col / gridConfig.cols) * 20;
-              const saturation = 15 + z * 0.1;
-              const lightness = 35 + z * 0.2;
-              dotEl.style.background = `radial-gradient(circle at 30% 30%,
-                hsla(${hue}, ${saturation}%, ${lightness + 10}%, ${0.25 + brightness * 0.1}),
-                hsla(${hue}, ${saturation + 5}%, ${lightness - 5}%, ${0.15 + brightness * 0.1}))`;
-              dotEl.style.boxShadow = 'none';
-              dotEl.style.opacity = `${0.25 + brightness * 0.15}`;
+              fillStyle = `hsla(${hue}, 15%, 35%, ${0.25 + brightness * 0.1})`;
+              opacity = 0.25 + brightness * 0.15;
             } else {
-              // Teal wave colors for missed past days
               const hue = 170 + (col / gridConfig.cols) * 30 + Math.sin(timeRef.current + row * 0.1) * 15;
-              const saturation = 50 + z * 0.3;
-              const lightness = 60 + z * 0.4;
-              dotEl.style.background = `radial-gradient(circle at 30% 30%,
-                hsla(${hue}, ${saturation}%, ${lightness + 15}%, ${0.6 + brightness * 0.3}),
-                hsla(${hue}, ${saturation + 10}%, ${lightness - 5}%, ${0.4 + brightness * 0.3}))`;
-              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.3}px hsla(${hue}, 70%, 60%, ${brightness * 0.3})`;
-              dotEl.style.opacity = `${0.5 + brightness * 0.4}`;
+              fillStyle = `hsla(${hue}, 50%, 60%, ${0.6 + brightness * 0.3})`;
+              opacity = 0.5 + brightness * 0.4;
+            }
+
+            ctx.globalAlpha = opacity;
+            ctx.fillStyle = fillStyle;
+            ctx.fill();
+
+            if (dot.isToday || dot.isCompleted) {
+              ctx.shadowBlur = gridConfig.dotSize * 0.3;
+              ctx.shadowColor = fillStyle;
+              ctx.fill();
+              ctx.shadowBlur = 0;
             }
           });
 
@@ -488,7 +504,49 @@
         };
       }, [dotsData, gridConfig]);
 
-      // Auto-complete timer
+      return (
+        <div ref={containerRef} className="w-full flex justify-center items-center overflow-hidden wave-container" style={{ height }}>
+          <canvas
+            ref={gridRef}
+            onClick={isInteractive ? onComplete : undefined}
+            style={{
+              width: `${gridConfig.cols * (gridConfig.dotSize + gridConfig.gap) - gridConfig.gap}px`,
+              height: `${Math.ceil(365 / gridConfig.cols) * (gridConfig.dotSize + gridConfig.gap) - gridConfig.gap}px`,
+              maxWidth: '100%',
+              maxHeight: '100%',
+              cursor: isInteractive ? 'pointer' : 'default'
+            }}
+          />
+        </div>
+      );
+    };
+
+    const SplashScreen = ({ history, onComplete }) => {
+      const today = new Date();
+      const todayDayOfYear = getDayOfYear(today);
+
+      const stats = useMemo(() => {
+        let completed = 0;
+        let streak = 0;
+        let countingStreak = true;
+
+        for (let i = 0; i < 365; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const key = getDateKey(date);
+          const cycles = history[key] || 0;
+
+          if (cycles >= CYCLES_TO_COMPLETE) {
+            completed++;
+            if (countingStreak) streak++;
+          } else if (countingStreak && i > 0) {
+            countingStreak = false;
+          }
+        }
+
+        return { completed, streak };
+      }, [history]);
+
       useEffect(() => {
         const timer = setTimeout(onComplete, 5000);
         return () => clearTimeout(timer);
@@ -509,29 +567,7 @@
             </p>
           </header>
 
-          <div ref={containerRef} className="flex-1 flex justify-center items-center p-4 overflow-hidden wave-container">
-            <div
-              ref={gridRef}
-              className="wave-grid"
-              style={{
-                gridTemplateColumns: `repeat(${gridConfig.cols}, ${gridConfig.dotSize}px)`,
-                gap: `${gridConfig.gap}px`
-              }}
-            >
-              {dotsData.map((dot, i) => (
-                <div
-                  key={i}
-                  ref={el => dotsRef.current[i] = el}
-                  className={`wave-dot ${dot.isToday ? 'today' : ''}`}
-                  style={{
-                    width: `${gridConfig.dotSize}px`,
-                    height: `${gridConfig.dotSize}px`,
-                    position: 'relative'
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+          <WaveGrid history={history} onComplete={onComplete} />
 
           <footer className="p-4 text-center flex-shrink-0">
             <div className="flex justify-center gap-8 mb-3">
@@ -695,10 +731,7 @@
       </div>
     );
 
-    const YearOverview = ({ history }) => {
-      const days = useMemo(() => getLastNDays(365), []);
-      const today = getDateKey();
-
+    const YearOverview = ({ history, onShowStats }) => {
       const stats = useMemo(() => {
         let completed = 0;
         let streak = 0;
@@ -721,26 +754,9 @@
         return { completed, streak };
       }, [history]);
 
-      const particles = useMemo(() => {
-        return days.map((dateKey, i) => {
-          const angle = (i / days.length) * Math.PI * 12 + Math.random() * 0.5;
-          const radius = 15 + (i / days.length) * 35 + Math.random() * 8;
-          const x = 50 + Math.cos(angle) * radius;
-          const y = 50 + Math.sin(angle) * radius;
-          const cycles = history[dateKey] || 0;
-          const isCompleted = cycles >= CYCLES_TO_COMPLETE;
-          const isMissed = !isCompleted && dateKey !== today;
-          const isTodayDate = dateKey === today;
-          return {
-            dateKey, x: Math.max(5, Math.min(95, x)), y: Math.max(5, Math.min(95, y)),
-            completed: isCompleted, missed: isMissed, isToday: isTodayDate, delay: (i % 30) * 0.1
-          };
-        });
-      }, [days, history, today]);
-
       return (
-        <div className="relative">
-          <div className="flex justify-center gap-8 mb-3">
+        <div className="relative group">
+          <div className="flex justify-center gap-8 mb-3 relative z-10 transition-opacity group-hover:opacity-100">
             <div className="text-center">
               <div className="text-2xl text-amber-400 font-light">{stats.streak}</div>
               <div className="text-xs text-amber-200/40 uppercase tracking-wider">Streak</div>
@@ -751,45 +767,34 @@
             </div>
           </div>
 
-          <div className="relative w-full h-40 rounded-lg overflow-hidden bg-stone-900/50">
-            <div
-              className="absolute inset-0 opacity-30"
-              style={{ background: 'radial-gradient(ellipse at 50% 50%, #d97706 0%, transparent 70%)' }}
-            />
-            {particles.map((p, i) => {
-              const size = p.completed ? 6 : p.missed ? 3 : 4;
-              return (
-                <div
-                  key={p.dateKey}
-                  className="absolute rounded-full"
-                  style={{
-                    left: `${p.x}%`,
-                    top: `${p.y}%`,
-                    width: `${size}px`,
-                    height: `${size}px`,
-                    transform: 'translate(-50%, -50%)',
-                    backgroundColor: p.completed ? '#d97706' : p.missed ? '#44403c' : '#78350f',
-                    opacity: p.completed ? 0.9 : p.missed ? 0.3 : 0.5,
-                    boxShadow: p.completed ? '0 0 8px #d97706' : 'none',
-                    border: p.isToday ? '2px solid #fbbf24' : 'none',
-                    animation: p.completed ? `particlePulse ${2 + (i % 2)}s ease-in-out infinite ${p.delay * 0.5}s` : 'none'
-                  }}
-                />
-              );
-            })}
+          <div className="relative w-full h-48 rounded-xl overflow-hidden bg-stone-900/40 border border-stone-800/50 shadow-inner">
+            <div className="absolute inset-0 z-0">
+              <WaveGrid history={history} isInteractive={false} height="100%" />
+            </div>
+
+            <div className="absolute inset-0 bg-stone-950/20 z-10" />
+
+            <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <button
+                onClick={onShowStats}
+                className="px-6 py-2 rounded-full bg-amber-600/90 text-amber-50 text-sm font-medium backdrop-blur-sm shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all"
+              >
+                View Detailed Stats
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-2 text-xs text-amber-200/30">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-amber-600 shadow-lg shadow-amber-600/50" />
+          <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-amber-200/20 uppercase tracking-widest">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-600 shadow-sm shadow-amber-600/50" />
               <span>Done</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-stone-600" />
               <span>Missed</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full border border-amber-400 bg-transparent" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full border border-amber-400/50" />
               <span>Today</span>
             </div>
           </div>
@@ -1098,11 +1103,10 @@
                 <button
                   key={mood.value}
                   onClick={() => setSelectedMood(mood.value)}
-                  className={`flex-1 py-2 rounded-lg text-xs transition-all ${
-                    selectedMood === mood.value
-                      ? 'bg-amber-600 text-amber-100'
-                      : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700'
-                  }`}
+                  className={`flex-1 py-2 rounded-lg text-xs transition-all ${selectedMood === mood.value
+                    ? 'bg-amber-600 text-amber-100'
+                    : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700'
+                    }`}
                 >
                   {mood.label}
                 </button>
@@ -1200,154 +1204,145 @@
       };
 
       return (
-      <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
-        <div className="p-5 pb-24">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-amber-200/80">Settings</span>
-            <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
-          </div>
-
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-medium text-amber-200/50 uppercase tracking-wider">Your Year</h3>
-              <button onClick={onShowStats} className="text-xs text-amber-500 hover:text-amber-400">View Stats</button>
+        <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
+          <div className="p-5 pb-24">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-amber-200/80">Settings</span>
+              <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
             </div>
-            <YearOverview history={history} />
-            <div className="mt-3 flex justify-center">
-              <div className="text-center">
-                <div className="text-lg text-amber-400">{streaks?.longestStreak || 0}</div>
-                <div className="text-xs text-amber-200/30">Best Streak</div>
+
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <h3 className="text-xs font-medium text-amber-200/50 uppercase tracking-wider mb-3">Your Year</h3>
+              <YearOverview history={history} onShowStats={onShowStats} />
+            </section>
+
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-medium text-amber-200/50 uppercase tracking-wider">Reminders</h3>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => setReminderTime(e.target.value)}
+                  className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none focus:border-amber-700"
+                />
               </div>
-            </div>
-          </section>
+              <Toggle enabled={notificationsEnabled} onChange={handleNotificationToggle} label="Daily Reminder" />
+            </section>
 
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-medium text-amber-200/50 uppercase tracking-wider">Reminders</h3>
-              <input
-                type="time"
-                value={reminderTime}
-                onChange={(e) => setReminderTime(e.target.value)}
-                className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none focus:border-amber-700"
-              />
-            </div>
-            <Toggle enabled={notificationsEnabled} onChange={handleNotificationToggle} label="Daily Reminder" />
-          </section>
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Sound</h3>
+              <Toggle enabled={soundEnabled} onChange={setSoundEnabled} label="Enabled" />
+              {soundEnabled && (
+                <>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-amber-200/70 text-sm">Type</span>
+                    <select
+                      value={soundType}
+                      onChange={(e) => setSoundType(e.target.value)}
+                      className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none"
+                    >
+                      <option value="tone">Tone</option>
+                      <option value="chime">Chime</option>
+                      <option value="bell">Bell</option>
+                      <option value="silent">Silent</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-amber-200/70 text-sm">Volume {soundVolume}%</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={soundVolume}
+                      onChange={(e) => setSoundVolume(parseInt(e.target.value))}
+                      className="w-24 accent-amber-600"
+                    />
+                  </div>
+                </>
+              )}
+            </section>
 
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Sound</h3>
-            <Toggle enabled={soundEnabled} onChange={setSoundEnabled} label="Enabled" />
-            {soundEnabled && (
-              <>
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Haptic</h3>
+              <Toggle enabled={hapticEnabled} onChange={setHapticEnabled} label="Enabled" />
+              {hapticEnabled && (
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-amber-200/70 text-sm">Type</span>
+                  <span className="text-amber-200/70 text-sm">Intensity</span>
                   <select
-                    value={soundType}
-                    onChange={(e) => setSoundType(e.target.value)}
+                    value={hapticIntensity}
+                    onChange={(e) => setHapticIntensity(e.target.value)}
                     className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none"
                   >
-                    <option value="tone">Tone</option>
-                    <option value="chime">Chime</option>
-                    <option value="bell">Bell</option>
-                    <option value="silent">Silent</option>
+                    <option value="light">Light</option>
+                    <option value="medium">Medium</option>
+                    <option value="strong">Strong</option>
                   </select>
                 </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-amber-200/70 text-sm">Volume {soundVolume}%</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={soundVolume}
-                    onChange={(e) => setSoundVolume(parseInt(e.target.value))}
-                    className="w-24 accent-amber-600"
-                  />
-                </div>
-              </>
-            )}
-          </section>
+              )}
+            </section>
 
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Haptic</h3>
-            <Toggle enabled={hapticEnabled} onChange={setHapticEnabled} label="Enabled" />
-            {hapticEnabled && (
-              <div className="flex items-center justify-between py-2">
-                <span className="text-amber-200/70 text-sm">Intensity</span>
-                <select
-                  value={hapticIntensity}
-                  onChange={(e) => setHapticIntensity(e.target.value)}
-                  className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none"
-                >
-                  <option value="light">Light</option>
-                  <option value="medium">Medium</option>
-                  <option value="strong">Strong</option>
-                </select>
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Pattern</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(PRESETS).map(([key, value]) => (
+                  <button
+                    key={key}
+                    onClick={() => handlePresetChange(key)}
+                    className={`p-2 rounded-lg text-xs transition-all ${preset === key ? 'bg-amber-900/50 text-amber-200 border border-amber-700/50' : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700 border border-transparent'}`}
+                  >
+                    {value.name}
+                  </button>
+                ))}
               </div>
-            )}
-          </section>
+            </section>
 
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Pattern</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {Object.entries(PRESETS).map(([key, value]) => (
+            <section className="mb-4 pb-4 border-b border-stone-800">
+              <h3 className="text-xs text-amber-200/40 mb-2 uppercase tracking-wider">Custom (seconds)</h3>
+              <div className="grid grid-cols-4 gap-2">
+                {PHASES.map((p, i) => (
+                  <div key={i} className="text-center">
+                    <label className="text-xs text-amber-200/30 block mb-1">{p.name}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="15"
+                      value={durations[i]}
+                      onChange={(e) => {
+                        const newDurations = [...durations];
+                        newDurations[i] = parseInt(e.target.value) || 0;
+                        setDurations(newDurations);
+                      }}
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-center text-amber-200 text-sm focus:outline-none focus:border-amber-700"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Data</h3>
+              <div className="flex flex-col gap-2">
                 <button
-                  key={key}
-                  onClick={() => handlePresetChange(key)}
-                  className={`p-2 rounded-lg text-xs transition-all ${preset === key ? 'bg-amber-900/50 text-amber-200 border border-amber-700/50' : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700 border border-transparent'}`}
+                  onClick={handleExport}
+                  className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700"
                 >
-                  {value.name}
+                  Export Backup
                 </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs text-amber-200/40 mb-2 uppercase tracking-wider">Custom (seconds)</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {PHASES.map((p, i) => (
-                <div key={i} className="text-center">
-                  <label className="text-xs text-amber-200/30 block mb-1">{p.name}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="15"
-                    value={durations[i]}
-                    onChange={(e) => {
-                      const newDurations = [...durations];
-                      newDurations[i] = parseInt(e.target.value) || 0;
-                      setDurations(newDurations);
-                    }}
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-center text-amber-200 text-sm focus:outline-none focus:border-amber-700"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Data</h3>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={handleExport}
-                className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700"
-              >
-                Export Backup
-              </button>
-              <label className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700 text-center cursor-pointer">
-                Import Backup
-                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-              </label>
-              <button
-                onClick={handleClearData}
-                className="w-full p-2 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50"
-              >
-                Clear All Data
-              </button>
-            </div>
-          </section>
+                <label className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700 text-center cursor-pointer">
+                  Import Backup
+                  <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                </label>
+                <button
+                  onClick={handleClearData}
+                  className="w-full p-2 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50"
+                >
+                  Clear All Data
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-    );
+      );
     };
 
     function BreathingApp() {
@@ -1531,7 +1526,7 @@
             wakeLockRef.current.addEventListener('release', () => {
               wakeLockRef.current = null;
             });
-          } catch (e) {}
+          } catch (e) { }
         }
       }, []);
 
@@ -1548,7 +1543,7 @@
         requestWakeLock();
         // Try to enter fullscreen
         if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         } else if (document.documentElement.webkitRequestFullscreen) {
           document.documentElement.webkitRequestFullscreen();
         }
@@ -1562,7 +1557,7 @@
         setShowControls(true);
         releaseWakeLock();
         if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         } else if (document.webkitExitFullscreen) {
           document.webkitExitFullscreen();
         }
@@ -1696,7 +1691,7 @@
           gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
           oscillator.start(ctx.currentTime);
           oscillator.stop(ctx.currentTime + duration);
-        } catch (e) {}
+        } catch (e) { }
       }, [soundEnabled, soundType, soundVolume, getAudioContext]);
 
       const vibrate = useCallback((pattern) => {
@@ -1713,7 +1708,7 @@
             navigator.vibrate(0);
             navigator.vibrate(adjustedPattern);
           }
-        } catch (e) {}
+        } catch (e) { }
       }, [hapticEnabled, hapticIntensity]);
 
       const triggerPhaseFeedback = useCallback((phase) => {
@@ -1804,7 +1799,7 @@
         setShowInstallBanner(false);
         try {
           localStorage.setItem('install-prompt-dismissed', 'true');
-        } catch (e) {}
+        } catch (e) { }
       };
 
       const handlePresetChange = (newPreset) => {
@@ -1880,7 +1875,7 @@
       const completedPhasesTime = durations.slice(0, currentPhase).reduce((a, b) => a + b, 0);
       const currentCycleProgress = (completedPhasesTime + timeInPhase) / totalCycleDuration;
       const sessionProgress = ((cycleCount + currentCycleProgress) / CYCLES_TO_COMPLETE) * 100;
-      
+
       const getCircleScale = () => {
         if (!isRunning) return 0.6;
         switch (currentPhase) {
@@ -2083,7 +2078,7 @@
                   className="w-7 h-7 rounded-full bg-stone-800 text-amber-200/60 flex items-center justify-center relative"
                   aria-label="Settings"
                 >
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/></svg>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
                   {todayCompleted && <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse" aria-label="Today's goal completed" />}
                 </button>
               </div>
@@ -2174,4 +2169,5 @@
     ReactDOM.createRoot(document.getElementById('root')).render(<BreathingApp />);
   </script>
 </body>
+
 </html>

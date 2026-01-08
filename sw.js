@@ -1,10 +1,14 @@
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const CACHE_NAME = `tactical-breathing-v${CACHE_VERSION}`;
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  './icon-192.svg'
+  './icon-192.svg',
+  'https://cdn.tailwindcss.com/3.4.17',
+  'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+  'https://unpkg.com/@babel/standalone@7.28.5/babel.min.js'
 ];
 
 // Install - cache assets
@@ -46,8 +50,8 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return fetch(event.request).then((networkResponse) => {
-          // Cache new successful responses for same-origin requests
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          // Cache successful responses
+          if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseClone);
