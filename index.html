@@ -166,7 +166,8 @@
       lastPreset: 'box',
       customDurations: [4, 4, 4, 4],
       defaultCycles: 4,
-      gesturesEnabled: true
+      gesturesEnabled: true,
+      ppg: { enabled: false }
     };
 
     const DEFAULT_STREAKS = {
@@ -233,7 +234,7 @@
 
     const MIN_SESSION_DURATION = 60; // Minimum 1 minute to count as a session
 
-    const addSession = (pattern, duration, cycles, mood = null) => {
+    const addSession = (pattern, duration, cycles, mood = null, biofeedback = null) => {
       // Only record sessions that are at least 1 minute
       if (duration < MIN_SESSION_DURATION) return null;
 
@@ -243,7 +244,8 @@
         pattern,
         duration,
         cycles,
-        mood
+        mood,
+        biofeedback
       });
       saveSessions(sessions);
       return sessions;
@@ -1156,6 +1158,7 @@
       hapticEnabled, setHapticEnabled, hapticIntensity, setHapticIntensity,
       notificationsEnabled, setNotificationsEnabled, reminderTime, setReminderTime,
       preset, handlePresetChange, durations, setDurations, history, streaks,
+      ppgEnabled, setPpgEnabled,
       onShowStats, onClose
     }) => {
       const [activeTab, setActiveTab] = useState('technique');
@@ -1388,6 +1391,24 @@
                 </section>
 
                 <section className="bg-stone-900/40 p-4 rounded-xl border border-stone-800 space-y-4">
+                  <h3 className="text-[10px] font-medium text-amber-200/30 uppercase tracking-widest">Biofeedback</h3>
+                  <div className="bg-stone-950/40 p-3 rounded-lg border border-stone-800/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-200/70 text-xs font-medium">PPG Heart Monitor</span>
+                        <svg className="w-3.5 h-3.5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <Toggle enabled={ppgEnabled} onChange={setPpgEnabled} label="" />
+                    </div>
+                    <p className="text-[10px] text-amber-200/40 leading-relaxed">
+                      Uses camera to measure heart rate and blood oxygen during sessions. Place finger over camera when breathing.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="bg-stone-900/40 p-4 rounded-xl border border-stone-800 space-y-4">
                   <h3 className="text-[10px] font-medium text-amber-200/30 uppercase tracking-widest text-center">Data & Backup</h3>
                   <div className="flex gap-2">
                     <button
@@ -1419,6 +1440,269 @@
                 </section>
               </div>
             )}
+          </div>
+        </div>
+      );
+    };
+
+    // ============ PPG BIOFEEDBACK COMPONENT ============
+    const PPGBiofeedback = ({ isActive, onReading }) => {
+      const [fingerOn, setFingerOn] = useState(false);
+      const [heartRate, setHeartRate] = useState(null);
+      const [spO2, setSpO2] = useState(null);
+      const [signalQuality, setSignalQuality] = useState(0);
+      const [calibrating, setCalibrating] = useState(true);
+
+      const videoRef = useRef(null);
+      const canvasRef = useRef(null);
+      const streamRef = useRef(null);
+      const samplesRef = useRef([]);
+      const calibrationFramesRef = useRef(0);
+      const animationFrameRef = useRef(null);
+
+      const bufferSize = 150;
+
+      useEffect(() => {
+        if (!isActive) {
+          // Cleanup when inactive
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+          }
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+          return;
+        }
+
+        // Start camera
+        const startCamera = async () => {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: 'user',
+                width: { ideal: 160 },
+                height: { ideal: 120 },
+                frameRate: { ideal: 30 }
+              }
+            });
+
+            streamRef.current = stream;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              await videoRef.current.play();
+              analyze();
+            }
+          } catch (err) {
+            console.warn('Camera access denied:', err);
+          }
+        };
+
+        startCamera();
+
+        return () => {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+          }
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+        };
+      }, [isActive]);
+
+      const bandpass = (signal) => {
+        const result = [];
+        for (let i = 15; i < signal.length; i++) {
+          const slow = signal.slice(i - 15, i).reduce((a, b) => a + b) / 15;
+          const fast = signal.slice(i - 5, i).reduce((a, b) => a + b) / 5;
+          result.push(fast - slow);
+        }
+        return result;
+      };
+
+      const findPeaks = (signal) => {
+        const peaks = [];
+        const threshold = Math.max(...signal.map(Math.abs)) * 0.4;
+        for (let i = 3; i < signal.length - 3; i++) {
+          if (signal[i] > threshold &&
+              signal[i] >= signal[i-1] && signal[i] >= signal[i-2] &&
+              signal[i] >= signal[i+1] && signal[i] >= signal[i+2]) {
+            if (!peaks.length || i - peaks[peaks.length-1] > 9) peaks.push(i);
+          }
+        }
+        return peaks;
+      };
+
+      const ac = (arr) => {
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return Math.sqrt(arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length);
+      };
+
+      const dc = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+      const calculateHR = () => {
+        const reds = samplesRef.current.map(s => s.r);
+        const filtered = bandpass(reds);
+        const peaks = findPeaks(filtered);
+
+        if (peaks.length < 3) return null;
+
+        const intervals = [];
+        for (let i = 1; i < peaks.length; i++) {
+          const dt = samplesRef.current[peaks[i]].t - samplesRef.current[peaks[i-1]].t;
+          if (dt > 300 && dt < 1500) intervals.push(dt);
+        }
+
+        if (intervals.length < 2) return null;
+        intervals.sort((a, b) => a - b);
+        return Math.round(60000 / intervals[Math.floor(intervals.length / 2)]);
+      };
+
+      const estimateSpO2 = () => {
+        const recent = samplesRef.current.slice(-90);
+
+        const rAC = ac(recent.map(s => s.r));
+        const rDC = dc(recent.map(s => s.r));
+        const gAC = ac(recent.map(s => s.g));
+        const gDC = dc(recent.map(s => s.g));
+
+        if (rDC < 1 || gDC < 1 || gAC < 0.001) return null;
+
+        const R = (rAC / rDC) / (gAC / gDC);
+        let spo2 = Math.round(110 - 25 * R);
+        return Math.max(70, Math.min(100, spo2));
+      };
+
+      const getSignalQuality = () => {
+        const recent = samplesRef.current.slice(-60);
+        if (recent.length < 60) return 0;
+        const reds = recent.map(s => s.r);
+        const pi = ac(reds) / dc(reds);
+        if (pi < 0.005) return 10;
+        if (pi > 0.15) return 20;
+        return Math.round(Math.max(0, 100 - Math.abs(pi - 0.025) * 2000));
+      };
+
+      const analyze = () => {
+        if (!videoRef.current || !canvasRef.current || !streamRef.current) return;
+
+        const now = performance.now();
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        ctx.drawImage(videoRef.current, 0, 0, 64, 64);
+        const frame = ctx.getImageData(16, 16, 32, 32).data;
+
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < frame.length; i += 4) {
+          r += frame[i];
+          g += frame[i + 1];
+          b += frame[i + 2];
+        }
+        const pixels = frame.length / 4;
+        r /= pixels;
+        g /= pixels;
+        b /= pixels;
+
+        const brightness = (r + g + b) / 3;
+        const fingerDetected = brightness > 50 && brightness < 220 &&
+                               r > g * 1.1 && r > b * 1.2 && r > 70;
+
+        setFingerOn(fingerDetected);
+
+        if (!fingerDetected) {
+          samplesRef.current = [];
+          setCalibrating(true);
+          calibrationFramesRef.current = 0;
+          setHeartRate(null);
+          setSpO2(null);
+          setSignalQuality(0);
+        } else {
+          samplesRef.current.push({ r, g, b, t: now });
+          if (samplesRef.current.length > bufferSize) samplesRef.current.shift();
+
+          if (samplesRef.current.length >= 90) {
+            if (calibrating) {
+              calibrationFramesRef.current++;
+              if (calibrationFramesRef.current > 60) setCalibrating(false);
+            } else {
+              const quality = getSignalQuality();
+              setSignalQuality(quality);
+
+              if (quality > 30) {
+                const hr = calculateHR();
+                const oxygen = estimateSpO2();
+                setHeartRate(hr);
+                setSpO2(oxygen);
+
+                if (onReading) {
+                  onReading({ fingerOn: fingerDetected, hr, spo2: oxygen, quality });
+                }
+              }
+            }
+          }
+        }
+
+        animationFrameRef.current = requestAnimationFrame(analyze);
+      };
+
+      if (!isActive) return null;
+
+      return (
+        <div className="w-full max-w-xs bg-stone-900/50 rounded-xl p-3 border border-stone-800/50 backdrop-blur-sm">
+          {/* Hidden video and canvas */}
+          <video ref={videoRef} className="hidden" playsInline muted />
+          <canvas ref={canvasRef} width="64" height="64" className="hidden" />
+
+          {/* Compact UI */}
+          <div className="flex items-center gap-3">
+            {/* Sensor indicator */}
+            <div className="relative flex-shrink-0">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${fingerOn ? 'bg-red-500/20' : 'bg-stone-800'} transition-colors duration-300`}>
+                <svg className="w-6 h-6 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                </svg>
+              </div>
+              {fingerOn && !calibrating && (
+                <div className="absolute inset-0 rounded-full bg-red-500/30 animate-pulse" />
+              )}
+            </div>
+
+            {/* Readings */}
+            <div className="flex-1 grid grid-cols-2 gap-2 text-center">
+              <div>
+                <div className="text-lg font-semibold text-amber-200 tabular-nums">
+                  {heartRate ?? '--'}
+                </div>
+                <div className="text-[9px] text-amber-200/40 uppercase tracking-wide">BPM</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-amber-200 tabular-nums">
+                  {spO2 ? `${spO2}%` : '--'}
+                </div>
+                <div className="text-[9px] text-amber-200/40 uppercase tracking-wide">SpO₂</div>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="flex-shrink-0 text-right">
+              <div className="text-xs text-amber-200/60">
+                {!fingerOn ? '👆' : calibrating ? '⏳' : signalQuality > 50 ? '✓' : '⚠️'}
+              </div>
+            </div>
+          </div>
+
+          {/* Signal quality bar */}
+          <div className="mt-2 h-1 bg-stone-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all duration-300"
+              style={{ width: `${signalQuality}%` }}
+            />
+          </div>
+
+          {/* Status text */}
+          <div className="mt-1.5 text-center text-[10px] text-amber-200/40">
+            {!fingerOn ? 'Place finger on camera' : calibrating ? 'Calibrating...' : 'Measuring'}
           </div>
         </div>
       );
@@ -1478,6 +1762,8 @@
       const longPressTimer = useRef(null);
       const wakeLockRef = useRef(null);
       const [showQuickSettings, setShowQuickSettings] = useState(false);
+      const [ppgEnabled, setPpgEnabled] = useState(initialSettings.ppg.enabled);
+      const ppgDataRef = useRef({ readings: [], avgHR: null, maxHR: null, minHR: null, avgSpO2: null });
 
       // URL parameter handling for deep links and shortcuts
       useEffect(() => {
@@ -1542,10 +1828,11 @@
           lastPreset: preset,
           customDurations: durations,
           defaultCycles: CYCLES_TO_COMPLETE,
-          gesturesEnabled: true
+          gesturesEnabled: true,
+          ppg: { enabled: ppgEnabled }
         };
         saveSettings(settings);
-      }, [notificationsEnabled, reminderTime, soundEnabled, soundType, soundVolume, hapticEnabled, hapticIntensity, theme, reduceMotion, preset, durations]);
+      }, [notificationsEnabled, reminderTime, soundEnabled, soundType, soundVolume, hapticEnabled, hapticIntensity, theme, reduceMotion, preset, durations, ppgEnabled]);
 
       // Notification scheduling
       useEffect(() => {
@@ -1730,10 +2017,46 @@
 
       const completeSession = useCallback((mood = null) => {
         const duration = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0;
-        addSession(preset, duration, cycleCount, mood);
+
+        // Calculate biofeedback summary if PPG was used
+        let biofeedback = null;
+        if (ppgEnabled && ppgDataRef.current.readings.length > 0) {
+          const validReadings = ppgDataRef.current.readings.filter(r => r.hr && r.spo2 && r.quality > 50);
+          if (validReadings.length > 0) {
+            const hrs = validReadings.map(r => r.hr);
+            const spo2s = validReadings.map(r => r.spo2);
+            biofeedback = {
+              avgHeartRate: Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length),
+              maxHeartRate: Math.max(...hrs),
+              minHeartRate: Math.min(...hrs),
+              avgSpO2: Math.round(spo2s.reduce((a, b) => a + b, 0) / spo2s.length),
+              samples: validReadings.length
+            };
+          }
+        }
+
+        addSession(preset, duration, cycleCount, mood, biofeedback);
         setShowCompletion(false);
         setSessionStartTime(null);
-      }, [sessionStartTime, preset, cycleCount]);
+
+        // Reset PPG data
+        ppgDataRef.current = { readings: [], avgHR: null, maxHR: null, minHR: null, avgSpO2: null };
+      }, [sessionStartTime, preset, cycleCount, ppgEnabled]);
+
+      const handlePPGReading = useCallback((reading) => {
+        if (reading.hr && reading.spo2 && reading.quality > 30) {
+          ppgDataRef.current.readings.push({
+            hr: reading.hr,
+            spo2: reading.spo2,
+            quality: reading.quality,
+            timestamp: Date.now()
+          });
+          // Keep only last 100 readings
+          if (ppgDataRef.current.readings.length > 100) {
+            ppgDataRef.current.readings.shift();
+          }
+        }
+      }, []);
 
       const getAudioContext = useCallback(() => {
         if (!audioContextRef.current) {
@@ -2040,6 +2363,7 @@
               preset={preset} handlePresetChange={handlePresetChange}
               durations={durations} setDurations={setDurations}
               history={history} streaks={streaks}
+              ppgEnabled={ppgEnabled} setPpgEnabled={setPpgEnabled}
               onShowStats={() => { setShowSettings(false); setShowStats(true); }}
               onClose={() => setShowSettings(false)}
             />
@@ -2240,6 +2564,16 @@
                 ))}
               </div>
             </div>
+
+            {/* PPG Biofeedback Widget */}
+            {ppgEnabled && isRunning && (
+              <div className="mt-3">
+                <PPGBiofeedback
+                  isActive={ppgEnabled && isRunning}
+                  onReading={handlePPGReading}
+                />
+              </div>
+            )}
           </footer>
         </div>
       );
