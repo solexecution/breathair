@@ -1,25 +1,30 @@
-const CACHE_NAME = 'tactical-breathing-v1';
+const CACHE_VERSION = 2;
+const CACHE_NAME = `tactical-breathing-v${CACHE_VERSION}`;
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.svg'
 ];
 
+// Install - cache assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(urlsToCache))
+      .catch((err) => console.warn('Cache failed:', err))
   );
   self.skipWaiting();
 });
 
+// Activate - clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName.startsWith('tactical-breathing-') && cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -29,42 +34,97 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Fetch - cache first, then network
 self.addEventListener('fetch', (event) => {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        return fetch(event.request).then((networkResponse) => {
+          // Cache new successful responses for same-origin requests
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        });
+      })
+      .catch(() => {
+        // Return offline fallback for navigation requests
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
       })
   );
 });
 
-// Handle notification click
+// Handle notification click - deep link to pattern
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
+  const pattern = event.notification.data?.pattern || 'box';
+  const action = event.action;
+
+  let url = './';
+  if (action === 'start' || !action) {
+    url = `./?pattern=${pattern}&autostart=true`;
+  }
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      if (clientList.length > 0) {
-        return clientList[0].focus();
+      // Try to focus existing window and navigate
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
       }
-      return clients.openWindow('/');
+      // Open new window if none exists
+      return clients.openWindow(url);
     })
   );
 });
 
-// Handle scheduled notification
+// Handle messages from app
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const pattern = event.data.pattern || 'box';
+    const patternNames = {
+      box: 'Box Breathing',
+      relaxing: '4-7-8 Relaxation',
+      energizing: 'Energizing',
+      calm: 'Quick Calm'
+    };
+
     self.registration.showNotification('Tactical Breathing', {
       body: event.data.body || 'Time for your daily breathing session',
-      icon: '/icon-192.svg',
-      badge: '/icon-192.svg',
+      icon: './icon-192.svg',
+      badge: './icon-192.svg',
       vibrate: [100, 50, 100],
       tag: 'breathing-reminder',
       renotify: true,
-      requireInteraction: false
+      requireInteraction: false,
+      data: { pattern },
+      actions: [
+        { action: 'start', title: `Start ${patternNames[pattern] || 'Session'}` },
+        { action: 'dismiss', title: 'Later' }
+      ]
     });
   }
+
+  // Handle skip waiting request
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
+
+// Log service worker version on install
+console.log(`Service Worker v${CACHE_VERSION} loaded`);

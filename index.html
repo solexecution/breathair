@@ -21,9 +21,9 @@
     }
   </script>
   <style>
-    body { 
-      margin: 0; 
-      background: #0c0a09; 
+    body {
+      margin: 0;
+      background: #0c0a09;
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
@@ -36,6 +36,56 @@
     @keyframes particlePulse {
       0%, 100% { opacity: 0.9; box-shadow: 0 0 12px #d97706, 0 0 4px #fbbf24; }
       50% { opacity: 1; box-shadow: 0 0 20px #d97706, 0 0 10px #fbbf24; }
+    }
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+    /* Focus visible for keyboard navigation */
+    *:focus-visible {
+      outline: 2px solid #d97706;
+      outline-offset: 2px;
+    }
+    button:focus:not(:focus-visible) {
+      outline: none;
+    }
+    /* Screen reader only text */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    /* Dynamic viewport height for mobile */
+    .h-dvh {
+      height: 100vh;
+      height: 100dvh;
+    }
+    /* Responsive breathing circle */
+    .breathing-circle {
+      width: 14rem;
+      height: 14rem;
+    }
+    @media (min-height: 700px) {
+      .breathing-circle {
+        width: 16rem;
+        height: 16rem;
+      }
+    }
+    @media (max-height: 600px) {
+      .breathing-circle {
+        width: 11rem;
+        height: 11rem;
+      }
     }
   </style>
 </head>
@@ -59,6 +109,183 @@
     };
 
     const CYCLES_TO_COMPLETE = 4;
+
+    // ============ DATA LAYER ============
+
+    const DEFAULT_SETTINGS = {
+      version: 1,
+      notifications: { enabled: false, time: '21:00' },
+      sound: { enabled: true, type: 'tone', volume: 50 },
+      haptic: { enabled: true, intensity: 'medium' },
+      theme: 'dark',
+      accentColor: 'amber',
+      reduceMotion: false,
+      lastPreset: 'box',
+      customDurations: [4, 4, 4, 4],
+      defaultCycles: 4,
+      gesturesEnabled: true
+    };
+
+    const DEFAULT_STREAKS = {
+      version: 1,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastSessionDate: null,
+      milestones: []
+    };
+
+    const loadSettings = () => {
+      try {
+        const saved = localStorage.getItem('breathing-settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...DEFAULT_SETTINGS, ...parsed };
+        }
+      } catch (e) {
+        console.warn('Settings corrupted, using defaults');
+      }
+      return { ...DEFAULT_SETTINGS };
+    };
+
+    const saveSettings = (settings) => {
+      try {
+        localStorage.setItem('breathing-settings', JSON.stringify(settings));
+      } catch (e) {}
+    };
+
+    const loadHistory = () => {
+      try {
+        const saved = localStorage.getItem('breathing-history');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return {};
+    };
+
+    const saveHistory = (history) => {
+      try {
+        localStorage.setItem('breathing-history', JSON.stringify(history));
+      } catch (e) {}
+    };
+
+    const loadSessions = () => {
+      try {
+        const saved = localStorage.getItem('breathing-sessions');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Prune sessions older than 30 days
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - 30);
+          const filtered = (parsed.sessions || []).filter(s => new Date(s.date) >= cutoff);
+          return { version: 1, sessions: filtered };
+        }
+      } catch (e) {}
+      return { version: 1, sessions: [] };
+    };
+
+    const saveSessions = (sessions) => {
+      try {
+        localStorage.setItem('breathing-sessions', JSON.stringify(sessions));
+      } catch (e) {}
+    };
+
+    const MIN_SESSION_DURATION = 60; // Minimum 1 minute to count as a session
+
+    const addSession = (pattern, duration, cycles, mood = null) => {
+      // Only record sessions that are at least 1 minute
+      if (duration < MIN_SESSION_DURATION) return null;
+
+      const sessions = loadSessions();
+      sessions.sessions.push({
+        date: new Date().toISOString(),
+        pattern,
+        duration,
+        cycles,
+        mood
+      });
+      saveSessions(sessions);
+      return sessions;
+    };
+
+    const loadStreaks = () => {
+      try {
+        const saved = localStorage.getItem('breathing-streaks');
+        if (saved) return { ...DEFAULT_STREAKS, ...JSON.parse(saved) };
+      } catch (e) {}
+      return { ...DEFAULT_STREAKS };
+    };
+
+    const saveStreaks = (streaks) => {
+      try {
+        localStorage.setItem('breathing-streaks', JSON.stringify(streaks));
+      } catch (e) {}
+    };
+
+    const updateStreaks = (history) => {
+      const streaks = loadStreaks();
+      const today = getDateKey();
+      const yesterday = getDateKey(new Date(Date.now() - 86400000));
+
+      const todayComplete = (history[today] || 0) >= CYCLES_TO_COMPLETE;
+      const yesterdayComplete = (history[yesterday] || 0) >= CYCLES_TO_COMPLETE;
+
+      if (todayComplete && streaks.lastSessionDate !== today) {
+        if (streaks.lastSessionDate === yesterday || streaks.currentStreak === 0) {
+          streaks.currentStreak++;
+        } else if (streaks.lastSessionDate !== today) {
+          streaks.currentStreak = 1;
+        }
+        streaks.lastSessionDate = today;
+        streaks.longestStreak = Math.max(streaks.longestStreak, streaks.currentStreak);
+
+        // Check milestones
+        const milestoneMarks = [7, 30, 60, 100, 365];
+        milestoneMarks.forEach(m => {
+          if (streaks.currentStreak >= m && !streaks.milestones.includes(m)) {
+            streaks.milestones.push(m);
+          }
+        });
+
+        saveStreaks(streaks);
+      }
+
+      return streaks;
+    };
+
+    const getStats = () => {
+      const sessions = loadSessions().sessions;
+      const history = loadHistory();
+
+      const totalSessions = sessions.length;
+      const totalMinutes = Math.round(sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
+
+      const patternCounts = {};
+      sessions.forEach(s => {
+        patternCounts[s.pattern] = (patternCounts[s.pattern] || 0) + 1;
+      });
+
+      const now = new Date();
+      const weekAgo = new Date(now - 7 * 86400000);
+      const twoWeeksAgo = new Date(now - 14 * 86400000);
+
+      const thisWeek = sessions.filter(s => new Date(s.date) >= weekAgo).length;
+      const lastWeek = sessions.filter(s => {
+        const d = new Date(s.date);
+        return d >= twoWeeksAgo && d < weekAgo;
+      }).length;
+
+      const daysCompleted = Object.values(history).filter(c => c >= CYCLES_TO_COMPLETE).length;
+
+      return {
+        totalSessions,
+        totalMinutes,
+        patternCounts,
+        thisWeek,
+        lastWeek,
+        daysCompleted
+      };
+    };
+
+    // ============ END DATA LAYER ============
 
     const getDateKey = (date = new Date()) => date.toISOString().split('T')[0];
 
@@ -468,7 +695,347 @@
       );
     };
 
-    const SettingsPanel = ({ soundEnabled, setSoundEnabled, hapticEnabled, setHapticEnabled, notificationsEnabled, setNotificationsEnabled, reminderTime, setReminderTime, preset, handlePresetChange, durations, setDurations, history, onClose }) => {
+    const StatsPanel = ({ history, onClose }) => {
+      const stats = useMemo(() => getStats(), []);
+      const days = useMemo(() => getLastNDays(30), []);
+      const sessions = useMemo(() => loadSessions().sessions, []);
+      const streaks = useMemo(() => loadStreaks(), []);
+
+      const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+      return (
+        <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
+          <div className="p-5 pb-20">
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-amber-200/80">Statistics</span>
+              <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">x</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-stone-900/50 rounded-lg p-4 text-center">
+                <div className="text-3xl text-amber-400 font-light">{stats.totalSessions}</div>
+                <div className="text-xs text-amber-200/40 uppercase">Sessions</div>
+              </div>
+              <div className="bg-stone-900/50 rounded-lg p-4 text-center">
+                <div className="text-3xl text-amber-400 font-light">{stats.totalMinutes}</div>
+                <div className="text-xs text-amber-200/40 uppercase">Minutes</div>
+              </div>
+              <div className="bg-stone-900/50 rounded-lg p-4 text-center">
+                <div className="text-3xl text-amber-400 font-light">{streaks.currentStreak}</div>
+                <div className="text-xs text-amber-200/40 uppercase">Current Streak</div>
+              </div>
+              <div className="bg-stone-900/50 rounded-lg p-4 text-center">
+                <div className="text-3xl text-amber-400 font-light">{streaks.longestStreak}</div>
+                <div className="text-xs text-amber-200/40 uppercase">Best Streak</div>
+              </div>
+            </div>
+
+            <section className="mb-6">
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">This Week vs Last</h3>
+              <div className="flex items-center gap-4">
+                <div className="flex-1 bg-stone-900/50 rounded-lg p-3 text-center">
+                  <div className="text-xl text-amber-400">{stats.thisWeek}</div>
+                  <div className="text-xs text-amber-200/40">This Week</div>
+                </div>
+                <div className="text-amber-200/30">{stats.thisWeek > stats.lastWeek ? '+' : ''}{stats.thisWeek - stats.lastWeek}</div>
+                <div className="flex-1 bg-stone-900/50 rounded-lg p-3 text-center">
+                  <div className="text-xl text-amber-200/50">{stats.lastWeek}</div>
+                  <div className="text-xs text-amber-200/40">Last Week</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-6">
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">30 Day Calendar</h3>
+              <div className="bg-stone-900/50 rounded-lg p-3">
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {weekdays.map((d, i) => (
+                    <div key={i} className="text-center text-xs text-amber-200/30">{d}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {days.map((dateKey) => {
+                    const cycles = history[dateKey] || 0;
+                    const isComplete = cycles >= CYCLES_TO_COMPLETE;
+                    const isToday = dateKey === getDateKey();
+                    return (
+                      <div
+                        key={dateKey}
+                        className={`aspect-square rounded-sm flex items-center justify-center text-xs
+                          ${isComplete ? 'bg-amber-600 text-amber-100' : cycles > 0 ? 'bg-amber-900/50 text-amber-200/50' : 'bg-stone-800 text-stone-600'}
+                          ${isToday ? 'ring-1 ring-amber-400' : ''}`}
+                        title={`${dateKey}: ${cycles} cycles`}
+                      >
+                        {cycles > 0 ? cycles : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-6">
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">By Pattern</h3>
+              <div className="space-y-2">
+                {Object.entries(PRESETS).map(([key, preset]) => {
+                  const count = stats.patternCounts[key] || 0;
+                  const percentage = stats.totalSessions > 0 ? (count / stats.totalSessions) * 100 : 0;
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      <div className="w-20 text-xs text-amber-200/50 truncate">{preset.name.split(' ')[0]}</div>
+                      <div className="flex-1 h-2 bg-stone-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-600 rounded-full" style={{ width: `${percentage}%` }} />
+                      </div>
+                      <div className="w-8 text-xs text-amber-200/40 text-right">{count}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Recent Sessions</h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {sessions.slice(-10).reverse().map((s, i) => (
+                  <div key={i} className="flex items-center justify-between bg-stone-900/50 rounded-lg p-2 text-xs">
+                    <div>
+                      <div className="text-amber-200/70">{PRESETS[s.pattern]?.name || s.pattern}</div>
+                      <div className="text-amber-200/30">{new Date(s.date).toLocaleDateString()}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-amber-400">{Math.round(s.duration / 60)}m</div>
+                      <div className="text-amber-200/30">{s.cycles} cycles</div>
+                    </div>
+                  </div>
+                ))}
+                {sessions.length === 0 && (
+                  <div className="text-center text-amber-200/30 text-sm py-4">No sessions yet</div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      );
+    };
+
+    const OnboardingFlow = ({ onComplete }) => {
+      const [step, setStep] = useState(0);
+
+      const steps = [
+        {
+          title: 'Welcome',
+          content: 'Tactical Breathing helps you calm your nervous system using techniques used by Navy SEALs and first responders.',
+          icon: (
+            <svg className="w-16 h-16 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          )
+        },
+        {
+          title: 'How It Works',
+          content: 'Follow the breathing circle: inhale as it expands, hold, exhale as it contracts, hold again. Complete 4 cycles for a full session.',
+          icon: (
+            <div className="w-16 h-16 rounded-full border-4 border-amber-500 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-amber-500/30" />
+            </div>
+          )
+        },
+        {
+          title: 'Choose Your Pattern',
+          content: 'Start with Box Breathing (4-4-4-4) - perfect for stress relief. You can explore other patterns in settings.',
+          icon: (
+            <div className="grid grid-cols-2 gap-2">
+              {['Box', '4-7-8', 'Energy', 'Calm'].map((p, i) => (
+                <div key={i} className={`px-2 py-1 rounded text-xs ${i === 0 ? 'bg-amber-600 text-amber-100' : 'bg-stone-700 text-amber-200/50'}`}>{p}</div>
+              ))}
+            </div>
+          )
+        },
+        {
+          title: 'Stay Consistent',
+          content: 'Set daily reminders to build a habit. Just a few minutes each day can reduce anxiety and improve focus.',
+          icon: (
+            <svg className="w-16 h-16 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+          )
+        }
+      ];
+
+      const handleNext = () => {
+        if (step < steps.length - 1) {
+          setStep(step + 1);
+        } else {
+          localStorage.setItem('breathing-onboarding-complete', 'true');
+          onComplete();
+        }
+      };
+
+      const handleSkip = () => {
+        localStorage.setItem('breathing-onboarding-complete', 'true');
+        onComplete();
+      };
+
+      const currentStep = steps[step];
+
+      return (
+        <div className="fixed inset-0 bg-stone-950 z-50 flex flex-col items-center justify-center p-6">
+          <button
+            onClick={handleSkip}
+            className="absolute top-4 right-4 text-amber-200/40 hover:text-amber-200 text-sm"
+          >
+            Skip
+          </button>
+
+          <div className="flex-1 flex flex-col items-center justify-center max-w-xs text-center">
+            <div className="mb-8">{currentStep.icon}</div>
+            <h2 className="text-2xl text-amber-200 font-light mb-4">{currentStep.title}</h2>
+            <p className="text-amber-200/60 text-sm leading-relaxed">{currentStep.content}</p>
+          </div>
+
+          <div className="w-full max-w-xs">
+            <div className="flex justify-center gap-2 mb-6">
+              {steps.map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2 h-2 rounded-full transition-all ${i === step ? 'bg-amber-500 w-4' : i < step ? 'bg-amber-600' : 'bg-stone-700'}`}
+                />
+              ))}
+            </div>
+            <button
+              onClick={handleNext}
+              className="w-full py-3 rounded-lg bg-amber-700 text-amber-100 hover:bg-amber-600 font-medium"
+            >
+              {step === steps.length - 1 ? 'Get Started' : 'Next'}
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const CompletionScreen = ({ duration, cycles, pattern, streaks, onSaveMood, onClose }) => {
+      const [selectedMood, setSelectedMood] = useState(null);
+      const [shareStatus, setShareStatus] = useState(null);
+      const moods = [
+        { value: 1, label: 'Stressed' },
+        { value: 2, label: 'Okay' },
+        { value: 3, label: 'Calm' },
+        { value: 4, label: 'Relaxed' },
+        { value: 5, label: 'Great' }
+      ];
+
+      const generateShareText = () => {
+        const minutes = Math.round(duration / 60);
+        const patternName = PRESETS[pattern]?.name || 'breathing';
+        let text = `I just completed ${minutes} minute${minutes !== 1 ? 's' : ''} of ${patternName} with Tactical Breathing.`;
+        if (streaks.currentStreak > 1) {
+          text += ` ${streaks.currentStreak} day streak!`;
+        }
+        return text;
+      };
+
+      const handleShare = async () => {
+        const shareText = generateShareText();
+
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title: 'Tactical Breathing',
+              text: shareText,
+              url: window.location.origin
+            });
+            setShareStatus('shared');
+          } catch (err) {
+            if (err.name !== 'AbortError') {
+              fallbackCopy(shareText);
+            }
+          }
+        } else {
+          fallbackCopy(shareText);
+        }
+      };
+
+      const fallbackCopy = async (text) => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setShareStatus('copied');
+          setTimeout(() => setShareStatus(null), 2000);
+        } catch (err) {
+          setShareStatus('error');
+          setTimeout(() => setShareStatus(null), 2000);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 bg-stone-950/95 z-50 flex flex-col items-center justify-center p-6">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-600/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl text-amber-200 font-light mb-2">Session Complete</h2>
+            <p className="text-amber-200/50">
+              {Math.round(duration / 60)} minutes - {cycles} cycles
+            </p>
+          </div>
+
+          {streaks.currentStreak > 0 && (
+            <div className="bg-amber-900/30 rounded-lg px-6 py-3 mb-6 text-center">
+              <div className="text-2xl text-amber-400">{streaks.currentStreak} day streak</div>
+              {streaks.currentStreak === streaks.longestStreak && streaks.currentStreak > 1 && (
+                <div className="text-xs text-amber-200/50">Personal best!</div>
+              )}
+            </div>
+          )}
+
+          <div className="w-full max-w-xs mb-6">
+            <p className="text-amber-200/50 text-sm text-center mb-3">How do you feel?</p>
+            <div className="flex justify-between gap-2">
+              {moods.map((mood) => (
+                <button
+                  key={mood.value}
+                  onClick={() => setSelectedMood(mood.value)}
+                  className={`flex-1 py-2 rounded-lg text-xs transition-all ${
+                    selectedMood === mood.value
+                      ? 'bg-amber-600 text-amber-100'
+                      : 'bg-stone-800 text-amber-200/50 hover:bg-stone-700'
+                  }`}
+                >
+                  {mood.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button
+              onClick={() => { onSaveMood(selectedMood); onClose(); }}
+              className="w-full py-3 rounded-lg bg-amber-700 text-amber-100 hover:bg-amber-600"
+            >
+              Done
+            </button>
+            <button
+              onClick={handleShare}
+              className="w-full py-3 rounded-lg bg-stone-800 text-amber-200/70 hover:bg-stone-700 flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              {shareStatus === 'copied' ? 'Copied!' : shareStatus === 'shared' ? 'Shared!' : 'Share'}
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const SettingsPanel = ({
+      soundEnabled, setSoundEnabled, soundType, setSoundType, soundVolume, setSoundVolume,
+      hapticEnabled, setHapticEnabled, hapticIntensity, setHapticIntensity,
+      notificationsEnabled, setNotificationsEnabled, reminderTime, setReminderTime,
+      preset, handlePresetChange, durations, setDurations, history, streaks,
+      onShowStats, onClose
+    }) => {
       const handleNotificationToggle = async (enabled) => {
         if (enabled) {
           if (!('Notification' in window)) {
@@ -486,17 +1053,70 @@
         }
       };
 
+      const handleExport = () => {
+        const data = {
+          settings: loadSettings(),
+          history: loadHistory(),
+          sessions: loadSessions(),
+          streaks: loadStreaks(),
+          exportDate: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `breathing-backup-${getDateKey()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const handleImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            if (data.settings) saveSettings(data.settings);
+            if (data.history) saveHistory(data.history);
+            if (data.sessions) saveSessions(data.sessions);
+            if (data.streaks) saveStreaks(data.streaks);
+            alert('Data imported! Reloading...');
+            window.location.reload();
+          } catch (err) {
+            alert('Invalid backup file');
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      const handleClearData = () => {
+        if (confirm('Clear all data? This cannot be undone.')) {
+          localStorage.clear();
+          window.location.reload();
+        }
+      };
+
       return (
       <div className="fixed inset-0 bg-stone-950/95 z-50 overflow-y-auto">
-        <div className="p-5 pb-20">
+        <div className="p-5 pb-24">
           <div className="flex items-center justify-between mb-4">
             <span className="text-amber-200/80">Settings</span>
             <button onClick={onClose} className="text-amber-200/50 hover:text-amber-200 text-2xl leading-none">×</button>
           </div>
 
           <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Your Year</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-amber-200/50 uppercase tracking-wider">Your Year</h3>
+              <button onClick={onShowStats} className="text-xs text-amber-500 hover:text-amber-400">View Stats</button>
+            </div>
             <YearOverview history={history} />
+            <div className="mt-3 flex justify-center">
+              <div className="text-center">
+                <div className="text-lg text-amber-400">{streaks?.longestStreak || 0}</div>
+                <div className="text-xs text-amber-200/30">Best Streak</div>
+              </div>
+            </div>
           </section>
 
           <section className="mb-4 pb-4 border-b border-stone-800">
@@ -513,9 +1133,55 @@
           </section>
 
           <section className="mb-4 pb-4 border-b border-stone-800">
-            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Feedback</h3>
-            <Toggle enabled={soundEnabled} onChange={setSoundEnabled} label="Sound" />
-            <Toggle enabled={hapticEnabled} onChange={setHapticEnabled} label="Haptic" />
+            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Sound</h3>
+            <Toggle enabled={soundEnabled} onChange={setSoundEnabled} label="Enabled" />
+            {soundEnabled && (
+              <>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-amber-200/70 text-sm">Type</span>
+                  <select
+                    value={soundType}
+                    onChange={(e) => setSoundType(e.target.value)}
+                    className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none"
+                  >
+                    <option value="tone">Tone</option>
+                    <option value="chime">Chime</option>
+                    <option value="bell">Bell</option>
+                    <option value="silent">Silent</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-amber-200/70 text-sm">Volume {soundVolume}%</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={soundVolume}
+                    onChange={(e) => setSoundVolume(parseInt(e.target.value))}
+                    className="w-24 accent-amber-600"
+                  />
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="mb-4 pb-4 border-b border-stone-800">
+            <h3 className="text-xs font-medium mb-2 text-amber-200/50 uppercase tracking-wider">Haptic</h3>
+            <Toggle enabled={hapticEnabled} onChange={setHapticEnabled} label="Enabled" />
+            {hapticEnabled && (
+              <div className="flex items-center justify-between py-2">
+                <span className="text-amber-200/70 text-sm">Intensity</span>
+                <select
+                  value={hapticIntensity}
+                  onChange={(e) => setHapticIntensity(e.target.value)}
+                  className="bg-stone-800 border border-stone-700 rounded px-2 py-1 text-amber-200 text-xs focus:outline-none"
+                >
+                  <option value="light">Light</option>
+                  <option value="medium">Medium</option>
+                  <option value="strong">Strong</option>
+                </select>
+              </div>
+            )}
           </section>
 
           <section className="mb-4 pb-4 border-b border-stone-800">
@@ -533,7 +1199,7 @@
             </div>
           </section>
 
-          <section>
+          <section className="mb-4 pb-4 border-b border-stone-800">
             <h3 className="text-xs text-amber-200/40 mb-2 uppercase tracking-wider">Custom (seconds)</h3>
             <div className="grid grid-cols-4 gap-2">
               {PHASES.map((p, i) => (
@@ -555,48 +1221,119 @@
               ))}
             </div>
           </section>
+
+          <section>
+            <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Data</h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleExport}
+                className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700"
+              >
+                Export Backup
+              </button>
+              <label className="w-full p-2 rounded-lg text-xs bg-stone-800 text-amber-200/70 hover:bg-stone-700 border border-stone-700 text-center cursor-pointer">
+                Import Backup
+                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+              </label>
+              <button
+                onClick={handleClearData}
+                className="w-full p-2 rounded-lg text-xs bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900/50"
+              >
+                Clear All Data
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     );
     };
 
     function BreathingApp() {
+      // Load initial settings
+      const initialSettings = useMemo(() => loadSettings(), []);
+      const initialHistory = useMemo(() => loadHistory(), []);
+      const initialStreaks = useMemo(() => loadStreaks(), []);
+
       const [showSplash, setShowSplash] = useState(true);
       const [isRunning, setIsRunning] = useState(false);
       const [currentPhase, setCurrentPhase] = useState(0);
       const [timeInPhase, setTimeInPhase] = useState(0);
       const [cycleCount, setCycleCount] = useState(0);
-      const [preset, setPreset] = useState('box');
-      const [durations, setDurations] = useState(PRESETS.box.durations);
-      const [soundEnabled, setSoundEnabled] = useState(true);
-      const [hapticEnabled, setHapticEnabled] = useState(true);
+      const [sessionStartTime, setSessionStartTime] = useState(null);
+      const [preset, setPreset] = useState(initialSettings.lastPreset);
+      const [durations, setDurations] = useState(
+        initialSettings.lastPreset === 'custom'
+          ? initialSettings.customDurations
+          : PRESETS[initialSettings.lastPreset]?.durations || PRESETS.box.durations
+      );
+      const [soundEnabled, setSoundEnabled] = useState(initialSettings.sound.enabled);
+      const [soundType, setSoundType] = useState(initialSettings.sound.type);
+      const [soundVolume, setSoundVolume] = useState(initialSettings.sound.volume);
+      const [hapticEnabled, setHapticEnabled] = useState(initialSettings.haptic.enabled);
+      const [hapticIntensity, setHapticIntensity] = useState(initialSettings.haptic.intensity);
       const [showSettings, setShowSettings] = useState(false);
       const [showInfo, setShowInfo] = useState(false);
+      const [showStats, setShowStats] = useState(false);
+      const [showCompletion, setShowCompletion] = useState(false);
       const [pullDistance, setPullDistance] = useState(0);
       const [showResetHint, setShowResetHint] = useState(false);
-      const [history, setHistory] = useState({});
-      const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-      const [reminderTime, setReminderTime] = useState('21:00');
+      const [history, setHistory] = useState(initialHistory);
+      const [streaks, setStreaks] = useState(initialStreaks);
+      const [notificationsEnabled, setNotificationsEnabled] = useState(initialSettings.notifications.enabled);
+      const [reminderTime, setReminderTime] = useState(initialSettings.notifications.time);
       const [installPrompt, setInstallPrompt] = useState(null);
       const [showInstallBanner, setShowInstallBanner] = useState(false);
+      const [theme, setTheme] = useState(initialSettings.theme);
+      const [reduceMotion, setReduceMotion] = useState(initialSettings.reduceMotion);
+      const [newMilestone, setNewMilestone] = useState(null);
+      const [focusMode, setFocusMode] = useState(false);
+      const [showControls, setShowControls] = useState(true);
+      const [showOnboarding, setShowOnboarding] = useState(() => {
+        return !localStorage.getItem('breathing-onboarding-complete');
+      });
+      const controlsTimeoutRef = useRef(null);
 
       const audioContextRef = useRef(null);
       const intervalRef = useRef(null);
       const notificationTimerRef = useRef(null);
       const touchStartY = useRef(0);
+      const touchStartTime = useRef(0);
+      const lastTapTime = useRef(0);
+      const longPressTimer = useRef(null);
+      const wakeLockRef = useRef(null);
+      const [showQuickSettings, setShowQuickSettings] = useState(false);
 
+      // URL parameter handling for deep links and shortcuts
       useEffect(() => {
-        try {
-          const saved = localStorage.getItem('breathing-history');
-          if (saved) setHistory(JSON.parse(saved));
-          const notifSettings = localStorage.getItem('breathing-notifications');
-          if (notifSettings) {
-            const { enabled, time } = JSON.parse(notifSettings);
-            setNotificationsEnabled(enabled);
-            setReminderTime(time || '21:00');
-          }
-        } catch (e) {}
+        const params = new URLSearchParams(window.location.search);
+        const patternParam = params.get('pattern');
+        const autostart = params.get('autostart') === 'true';
 
+        if (patternParam && PRESETS[patternParam]) {
+          setPreset(patternParam);
+          setDurations(PRESETS[patternParam].durations);
+
+          if (autostart) {
+            setShowSplash(false);
+            // Start after a brief delay to let the UI render
+            setTimeout(() => {
+              let startPhase = 0;
+              const patternDurations = PRESETS[patternParam].durations;
+              while (patternDurations[startPhase] === 0) startPhase++;
+              setCurrentPhase(startPhase);
+              setTimeInPhase(0);
+              setSessionStartTime(Date.now());
+              setIsRunning(true);
+            }, 100);
+          }
+
+          // Clear URL params after processing
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }, []);
+
+      // PWA install prompt handling
+      useEffect(() => {
         const dismissed = localStorage.getItem('install-prompt-dismissed');
         const handleBeforeInstall = (e) => {
           e.preventDefault();
@@ -607,7 +1344,6 @@
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-
         window.addEventListener('appinstalled', () => {
           setShowInstallBanner(false);
           setInstallPrompt(null);
@@ -618,14 +1354,25 @@
         };
       }, []);
 
+      // Save settings whenever they change
       useEffect(() => {
-        try {
-          localStorage.setItem('breathing-notifications', JSON.stringify({
-            enabled: notificationsEnabled,
-            time: reminderTime
-          }));
-        } catch (e) {}
+        const settings = {
+          version: 1,
+          notifications: { enabled: notificationsEnabled, time: reminderTime },
+          sound: { enabled: soundEnabled, type: soundType, volume: soundVolume },
+          haptic: { enabled: hapticEnabled, intensity: hapticIntensity },
+          theme,
+          reduceMotion,
+          lastPreset: preset,
+          customDurations: durations,
+          defaultCycles: CYCLES_TO_COMPLETE,
+          gesturesEnabled: true
+        };
+        saveSettings(settings);
+      }, [notificationsEnabled, reminderTime, soundEnabled, soundType, soundVolume, hapticEnabled, hapticIntensity, theme, reduceMotion, preset, durations]);
 
+      // Notification scheduling
+      useEffect(() => {
         if (notificationTimerRef.current) {
           clearTimeout(notificationTimerRef.current);
         }
@@ -650,12 +1397,13 @@
                 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
                   navigator.serviceWorker.controller.postMessage({
                     type: 'SHOW_NOTIFICATION',
-                    body: 'Time for your daily breathing session'
+                    body: 'Time for your daily breathing session',
+                    pattern: preset
                   });
                 } else {
                   new Notification('Tactical Breathing', {
                     body: 'Time for your daily breathing session',
-                    icon: '/icon-192.svg'
+                    icon: './icon-192.svg'
                   });
                 }
               }
@@ -671,19 +1419,145 @@
             clearTimeout(notificationTimerRef.current);
           }
         };
-      }, [notificationsEnabled, reminderTime, history]);
+      }, [notificationsEnabled, reminderTime, history, preset]);
 
-      const saveHistory = useCallback((newHistory) => {
-        setHistory(newHistory);
-        try { localStorage.setItem('breathing-history', JSON.stringify(newHistory)); } catch (e) {}
+      // Wake Lock management
+      const requestWakeLock = useCallback(async () => {
+        if ('wakeLock' in navigator) {
+          try {
+            wakeLockRef.current = await navigator.wakeLock.request('screen');
+            wakeLockRef.current.addEventListener('release', () => {
+              wakeLockRef.current = null;
+            });
+          } catch (e) {}
+        }
       }, []);
+
+      const releaseWakeLock = useCallback(() => {
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+      }, []);
+
+      // Focus mode management
+      const enterFocusMode = useCallback(() => {
+        setFocusMode(true);
+        requestWakeLock();
+        // Try to enter fullscreen
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          document.documentElement.webkitRequestFullscreen();
+        }
+        // Auto-hide controls after 3 seconds
+        setShowControls(true);
+        controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+      }, [requestWakeLock]);
+
+      const exitFocusMode = useCallback(() => {
+        setFocusMode(false);
+        setShowControls(true);
+        releaseWakeLock();
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+        if (controlsTimeoutRef.current) {
+          clearTimeout(controlsTimeoutRef.current);
+        }
+      }, [releaseWakeLock]);
+
+      const handleFocusTap = useCallback(() => {
+        if (focusMode) {
+          setShowControls(true);
+          if (controlsTimeoutRef.current) {
+            clearTimeout(controlsTimeoutRef.current);
+          }
+          controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+        }
+      }, [focusMode]);
+
+      // Re-acquire wake lock when tab becomes visible
+      useEffect(() => {
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible' && isRunning && focusMode) {
+            requestWakeLock();
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }, [isRunning, focusMode, requestWakeLock]);
+
+      // Keyboard navigation
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          // Escape to close any open panel
+          if (e.key === 'Escape') {
+            if (showInfo) setShowInfo(false);
+            else if (showSettings) setShowSettings(false);
+            else if (showStats) setShowStats(false);
+            else if (showCompletion) { completeSession(null); }
+            else if (focusMode) exitFocusMode();
+          }
+          // Space to toggle running (when not in input)
+          if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'BUTTON') {
+            e.preventDefault();
+            if (!showInfo && !showSettings && !showStats && !showCompletion) {
+              toggleRunning();
+            }
+          }
+          // R to reset
+          if (e.key === 'r' && e.target.tagName !== 'INPUT') {
+            if (!showInfo && !showSettings && !showStats && !showCompletion) {
+              reset();
+            }
+          }
+          // F to toggle focus mode when running
+          if (e.key === 'f' && e.target.tagName !== 'INPUT' && isRunning) {
+            focusMode ? exitFocusMode() : enterFocusMode();
+          }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [showInfo, showSettings, showStats, showCompletion, focusMode, isRunning, completeSession, exitFocusMode, enterFocusMode, reset]);
+
+      // Release wake lock when not running
+      useEffect(() => {
+        if (!isRunning && wakeLockRef.current) {
+          releaseWakeLock();
+        }
+      }, [isRunning, releaseWakeLock]);
+
+      const persistHistory = useCallback((newHistory) => {
+        setHistory(newHistory);
+        saveHistory(newHistory);
+        // Update streaks when history changes
+        const updatedStreaks = updateStreaks(newHistory);
+        setStreaks(updatedStreaks);
+        // Check for new milestones
+        const currentMilestones = streaks.milestones || [];
+        const newMilestones = updatedStreaks.milestones.filter(m => !currentMilestones.includes(m));
+        if (newMilestones.length > 0) {
+          setNewMilestone(newMilestones[newMilestones.length - 1]);
+          setTimeout(() => setNewMilestone(null), 5000);
+        }
+      }, [streaks.milestones]);
 
       const recordCycle = useCallback(() => {
         const today = getDateKey();
         const newHistory = { ...history };
         newHistory[today] = (newHistory[today] || 0) + 1;
-        saveHistory(newHistory);
-      }, [history, saveHistory]);
+        persistHistory(newHistory);
+      }, [history, persistHistory]);
+
+      const completeSession = useCallback((mood = null) => {
+        const duration = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0;
+        addSession(preset, duration, cycleCount, mood);
+        setShowCompletion(false);
+        setSessionStartTime(null);
+      }, [sessionStartTime, preset, cycleCount]);
 
       const getAudioContext = useCallback(() => {
         if (!audioContextRef.current) {
@@ -692,8 +1566,8 @@
         return audioContextRef.current;
       }, []);
 
-      const playTone = useCallback((frequency, duration, type = 'sine') => {
-        if (!soundEnabled) return;
+      const playTone = useCallback((frequency, duration, oscType = 'sine') => {
+        if (!soundEnabled || soundType === 'silent') return;
         try {
           const ctx = getAudioContext();
           if (ctx.state === 'suspended') ctx.resume();
@@ -701,25 +1575,44 @@
           const gainNode = ctx.createGain();
           oscillator.connect(gainNode);
           gainNode.connect(ctx.destination);
+
+          // Adjust oscillator type based on sound setting
+          let actualType = oscType;
+          if (soundType === 'chime') {
+            actualType = 'sine';
+            frequency = frequency * 1.5; // Higher pitch for chime
+          } else if (soundType === 'bell') {
+            actualType = 'triangle';
+          }
+
           oscillator.frequency.value = frequency;
-          oscillator.type = type;
+          oscillator.type = actualType;
+
+          const volume = (soundVolume / 100) * 0.3; // Max volume 0.3
           gainNode.gain.setValueAtTime(0, ctx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05);
+          gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.05);
           gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
           oscillator.start(ctx.currentTime);
           oscillator.stop(ctx.currentTime + duration);
         } catch (e) {}
-      }, [soundEnabled, getAudioContext]);
+      }, [soundEnabled, soundType, soundVolume, getAudioContext]);
 
       const vibrate = useCallback((pattern) => {
         if (!hapticEnabled) return;
+        // Adjust pattern based on intensity
+        let adjustedPattern = pattern;
+        if (hapticIntensity === 'light') {
+          adjustedPattern = pattern.map(v => Math.round(v * 0.5));
+        } else if (hapticIntensity === 'strong') {
+          adjustedPattern = pattern.map(v => Math.round(v * 1.5));
+        }
         try {
           if ('vibrate' in navigator) {
             navigator.vibrate(0);
-            navigator.vibrate(pattern);
+            navigator.vibrate(adjustedPattern);
           }
         } catch (e) {}
-      }, [hapticEnabled]);
+      }, [hapticEnabled, hapticIntensity]);
 
       const triggerPhaseFeedback = useCallback((phase) => {
         const patterns = {
@@ -768,18 +1661,32 @@
           while (durations[startPhase] === 0) startPhase++;
           setCurrentPhase(startPhase);
           setTimeInPhase(0);
+          if (!sessionStartTime) {
+            setSessionStartTime(Date.now());
+          }
           triggerPhaseFeedback(startPhase);
         }
         setIsRunning(!isRunning);
       };
 
       const reset = useCallback(() => {
+        // Show completion screen if cycles were completed
+        if (cycleCount >= CYCLES_TO_COMPLETE && sessionStartTime) {
+          setShowCompletion(true);
+        }
         setIsRunning(false);
         setCurrentPhase(0);
         setTimeInPhase(0);
         setCycleCount(0);
+        if (!showCompletion) {
+          setSessionStartTime(null);
+        }
         vibrate([50, 30, 50]);
-      }, [vibrate]);
+        // Exit focus mode on reset
+        if (focusMode) {
+          exitFocusMode();
+        }
+      }, [vibrate, cycleCount, sessionStartTime, showCompletion, focusMode, exitFocusMode]);
 
       const handleInstall = async () => {
         if (!installPrompt) return;
@@ -804,15 +1711,59 @@
         reset();
       };
 
-      const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
+      const handleTouchStart = (e) => {
+        touchStartY.current = e.touches[0].clientY;
+        touchStartTime.current = Date.now();
+
+        // Start long-press timer (500ms)
+        longPressTimer.current = setTimeout(() => {
+          setShowQuickSettings(true);
+          vibrate([50]);
+        }, 500);
+      };
+
       const handleTouchMove = (e) => {
         const deltaY = e.touches[0].clientY - touchStartY.current;
+
+        // Cancel long-press if user moves
+        if (Math.abs(deltaY) > 10 && longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+
         if (deltaY > 0) {
           setPullDistance(Math.min(deltaY, 150));
           setShowResetHint(deltaY > 80);
         }
       };
+
       const handleTouchEnd = () => {
+        // Cancel long-press timer
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+
+        const touchDuration = Date.now() - touchStartTime.current;
+
+        // Check for double-tap (restart) - must be quick tap
+        if (touchDuration < 300 && pullDistance < 10) {
+          const now = Date.now();
+          if (now - lastTapTime.current < 300) {
+            // Double-tap detected - restart session
+            if (isRunning) {
+              setCurrentPhase(0);
+              setTimeInPhase(0);
+              setCycleCount(0);
+              setSessionStartTime(Date.now());
+              vibrate([50, 30, 50]);
+            }
+            lastTapTime.current = 0; // Reset to prevent triple-tap
+          } else {
+            lastTapTime.current = now;
+          }
+        }
+
         if (pullDistance > 80) reset();
         setPullDistance(0);
         setShowResetHint(false);
@@ -841,24 +1792,37 @@
 
       const circleScale = getCircleScale();
 
+      if (showOnboarding) {
+        return <OnboardingFlow onComplete={() => setShowOnboarding(false)} />;
+      }
+
       if (showSplash) {
         return <SplashScreen history={history} onComplete={() => setShowSplash(false)} />;
       }
 
       return (
-        <div 
-          className="min-h-screen bg-stone-950 text-amber-100 flex flex-col items-center justify-between p-4 pt-6 pb-16 overflow-hidden select-none"
+        <div
+          className="h-dvh bg-stone-950 text-amber-100 flex flex-col items-center justify-between px-4 py-3 overflow-hidden select-none"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onClick={handleFocusTap}
           style={{ transform: `translateY(${pullDistance * 0.3}px)` }}
+          role="application"
+          aria-label="Tactical Breathing Exercise"
         >
-          <div 
+          {/* Screen reader announcements */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {isRunning && `${phase.name}. ${phase.instruction}. ${Math.ceil(phaseDuration - timeInPhase)} seconds remaining.`}
+          </div>
+
+          <div
             className="absolute top-0 left-0 right-0 flex justify-center transition-opacity duration-200"
             style={{ opacity: pullDistance > 20 ? Math.min(pullDistance / 80, 1) : 0, transform: `translateY(${Math.min(pullDistance * 0.5, 40)}px)` }}
+            aria-hidden="true"
           >
             <div className={`text-sm transition-all duration-200 ${showResetHint ? 'text-amber-400' : 'text-amber-200/40'}`}>
-              {showResetHint ? '↓ Release to reset' : '↓ Pull to reset'}
+              {showResetHint ? 'Release to reset' : 'Pull to reset'}
             </div>
           </div>
 
@@ -891,39 +1855,155 @@
           {showSettings && (
             <SettingsPanel
               soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
+              soundType={soundType} setSoundType={setSoundType}
+              soundVolume={soundVolume} setSoundVolume={setSoundVolume}
               hapticEnabled={hapticEnabled} setHapticEnabled={setHapticEnabled}
+              hapticIntensity={hapticIntensity} setHapticIntensity={setHapticIntensity}
               notificationsEnabled={notificationsEnabled} setNotificationsEnabled={setNotificationsEnabled}
               reminderTime={reminderTime} setReminderTime={setReminderTime}
               preset={preset} handlePresetChange={handlePresetChange}
               durations={durations} setDurations={setDurations}
-              history={history}
+              history={history} streaks={streaks}
+              onShowStats={() => { setShowSettings(false); setShowStats(true); }}
               onClose={() => setShowSettings(false)}
             />
           )}
-
-          <div className="text-center w-full">
-            <div className="flex items-center justify-between mb-2 px-2">
-              <button onClick={() => setShowInfo(true)} className="w-8 h-8 rounded-full bg-stone-800 text-amber-200/60 text-sm flex items-center justify-center">?</button>
-              <h1 className="text-lg font-light tracking-wider text-amber-200/80">TACTICAL BREATHING</h1>
-              <button onClick={() => setShowSettings(true)} className="w-8 h-8 rounded-full bg-stone-800 text-amber-200/60 flex items-center justify-center relative">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/></svg>
-                {todayCompleted && <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-pulse" />}
-              </button>
+          {showStats && <StatsPanel history={history} onClose={() => setShowStats(false)} />}
+          {showCompletion && (
+            <CompletionScreen
+              duration={sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0}
+              cycles={cycleCount}
+              pattern={preset}
+              streaks={streaks}
+              onSaveMood={completeSession}
+              onClose={() => { completeSession(null); }}
+            />
+          )}
+          {newMilestone && (
+            <div className="fixed top-4 left-4 right-4 bg-amber-900/90 border border-amber-600 rounded-lg p-4 z-50 text-center animate-pulse">
+              <div className="text-amber-200 font-medium">{newMilestone} Day Streak!</div>
+              <div className="text-amber-200/60 text-sm">New milestone reached</div>
             </div>
-            <p className="text-amber-200/40 text-sm">{PRESETS[preset]?.name || 'Custom'}</p>
-          </div>
+          )}
 
-          <div className="relative w-64 h-64 flex items-center justify-center cursor-pointer" onClick={toggleRunning}>
-            <svg className="absolute w-full h-full -rotate-90">
+          {showQuickSettings && (
+            <div
+              className="fixed inset-0 bg-stone-950/80 z-50 flex items-end justify-center"
+              onClick={() => setShowQuickSettings(false)}
+            >
+              <div
+                className="bg-stone-900 rounded-t-2xl p-6 pb-8 w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-1 bg-stone-700 rounded-full mx-auto mb-6" />
+
+                <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Quick Pattern</h3>
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  {Object.entries(PRESETS).map(([key, value]) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        handlePresetChange(key);
+                        setShowQuickSettings(false);
+                      }}
+                      className={`p-3 rounded-lg text-sm transition-all ${preset === key ? 'bg-amber-700 text-amber-100' : 'bg-stone-800 text-amber-200/70 hover:bg-stone-700'}`}
+                    >
+                      {value.name}
+                    </button>
+                  ))}
+                </div>
+
+                <h3 className="text-xs font-medium mb-3 text-amber-200/50 uppercase tracking-wider">Quick Toggles</h3>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`flex-1 p-3 rounded-lg flex items-center justify-center gap-2 ${soundEnabled ? 'bg-amber-700 text-amber-100' : 'bg-stone-800 text-amber-200/50'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {soundEnabled ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                      )}
+                    </svg>
+                    Sound
+                  </button>
+                  <button
+                    onClick={() => setHapticEnabled(!hapticEnabled)}
+                    className={`flex-1 p-3 rounded-lg flex items-center justify-center gap-2 ${hapticEnabled ? 'bg-amber-700 text-amber-100' : 'bg-stone-800 text-amber-200/50'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Haptic
+                  </button>
+                </div>
+
+                <p className="text-center text-amber-200/30 text-xs mt-6">
+                  Double-tap to restart - Pull down to reset
+                </p>
+              </div>
+            </div>
+          )}
+
+          <header className={`text-center w-full transition-opacity duration-300 flex-shrink-0 ${focusMode && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <div className="flex items-center justify-between mb-1 px-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowInfo(true); }}
+                className="w-7 h-7 rounded-full bg-stone-800 text-amber-200/60 text-xs flex items-center justify-center"
+                aria-label="About breathing techniques"
+              >
+                ?
+              </button>
+              <div className="text-center">
+                <h1 className="text-base font-light tracking-wider text-amber-200/80">TACTICAL BREATHING</h1>
+                <p className="text-amber-200/40 text-xs">{PRESETS[preset]?.name || 'Custom'}</p>
+              </div>
+              <div className="flex gap-1">
+                {isRunning && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); focusMode ? exitFocusMode() : enterFocusMode(); }}
+                    className={`w-7 h-7 rounded-full ${focusMode ? 'bg-amber-700' : 'bg-stone-800'} text-amber-200/60 flex items-center justify-center`}
+                    aria-label={focusMode ? 'Exit focus mode (F)' : 'Enter focus mode (F)'}
+                    aria-pressed={focusMode}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      {focusMode ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      )}
+                    </svg>
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowSettings(true); }}
+                  className="w-7 h-7 rounded-full bg-stone-800 text-amber-200/60 flex items-center justify-center relative"
+                  aria-label="Settings"
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/></svg>
+                  {todayCompleted && <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse" aria-label="Today's goal completed" />}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <button
+            className="relative breathing-circle flex items-center justify-center cursor-pointer bg-transparent border-none flex-shrink-0"
+            onClick={toggleRunning}
+            aria-label={isRunning ? `${phase.name} phase. ${phase.instruction}. Press Space to pause.` : 'Start breathing exercise. Press Space to begin.'}
+            aria-describedby="breathing-status"
+          >
+            <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 256 256" aria-hidden="true">
               <circle cx="128" cy="128" r="115" fill="none" stroke="#292524" strokeWidth="6" />
               <circle cx="128" cy="128" r="115" fill="none" stroke={phase.color} strokeWidth="6" strokeDasharray={`${progress * 723} 723`} strokeLinecap="round" className="transition-all duration-100" />
             </svg>
-            
+
             <div
               className="absolute rounded-full transition-all duration-300 ease-out flex items-center justify-center active:scale-95"
               style={{
-                width: `${circleScale * 180}px`,
-                height: `${circleScale * 180}px`,
+                width: `${circleScale * 70}%`,
+                height: `${circleScale * 70}%`,
                 backgroundColor: `${phase.color}15`,
                 border: `2px solid ${phase.color}`,
                 boxShadow: `0 0 ${isRunning ? 50 : 25}px ${phase.color}30`
@@ -931,10 +2011,10 @@
             >
               <div className="text-center">
                 {!isRunning && cycleCount === 0 ? (
-                  <div className="text-2xl font-light mb-1 text-amber-200/60">Tap to start</div>
+                  <div className="text-xl font-light mb-1 text-amber-200/60">Tap to start</div>
                 ) : (
                   <>
-                    <div className="text-2xl font-light mb-1 transition-colors" style={{ color: phase.color }}>{phase.name}</div>
+                    <div className="text-xl font-light mb-1 transition-colors" style={{ color: phase.color }}>{phase.name}</div>
                     <div className="text-amber-200/40 text-sm">{Math.ceil(phaseDuration - timeInPhase)}s</div>
                   </>
                 )}
@@ -944,52 +2024,47 @@
             {PHASES.map((p, i) => {
               if (durations[i] === 0) return null;
               const angle = (i * 90 - 90) * (Math.PI / 180);
-              const x = 128 + Math.cos(angle) * 115;
-              const y = 128 + Math.sin(angle) * 115;
               return (
                 <div
                   key={i}
-                  className="absolute w-2.5 h-2.5 rounded-full transition-all duration-300"
+                  className="absolute w-2 h-2 rounded-full transition-all duration-300"
                   style={{
-                    left: `${x - 5}px`,
-                    top: `${y - 5}px`,
-                    backgroundColor: currentPhase === i ? p.color : '#44403c',
-                    transform: currentPhase === i ? 'scale(1.5)' : 'scale(1)'
+                    left: `${50 + Math.cos(angle) * 45}%`,
+                    top: `${50 + Math.sin(angle) * 45}%`,
+                    transform: `translate(-50%, -50%) ${currentPhase === i ? 'scale(1.5)' : 'scale(1)'}`,
+                    backgroundColor: currentPhase === i ? p.color : '#44403c'
                   }}
+                  aria-hidden="true"
                 />
               );
             })}
-          </div>
+          </button>
 
-          <div className="w-full max-w-xs text-center">
-            <p className="text-lg text-amber-200/60 mb-1">{phase.instruction}</p>
-            <p className="text-amber-200/30 text-sm mb-4">
+          <footer id="breathing-status" className={`w-full max-w-xs text-center transition-opacity duration-300 flex-shrink-0 ${focusMode && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <p className="text-base text-amber-200/60 mb-0.5" aria-live="polite">{phase.instruction}</p>
+            <p className="text-amber-200/30 text-xs mb-2">
               {cycleCount > 0 || isRunning ? (
-                <>Cycle {cycleCount + 1} of {CYCLES_TO_COMPLETE}{todayCompleted && <span className="ml-2 text-amber-500">✓</span>}</>
+                <>Cycle {cycleCount + 1}/{CYCLES_TO_COMPLETE}{todayCompleted && <span className="ml-2 text-amber-500">Done</span>}</>
               ) : 'Pull down to reset'}
             </p>
 
             <div className="w-full">
-              <div className="flex justify-between text-xs text-amber-200/40 mb-1">
-                <span>Session Progress</span>
-                <span>{Math.min(100, Math.round(sessionProgress))}%</span>
-              </div>
-              <div className="h-2 bg-stone-800 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-amber-700 to-amber-500 transition-all duration-100 ease-linear rounded-full"
                   style={{ width: `${Math.min(100, sessionProgress)}%` }}
                 />
               </div>
-              <div className="flex justify-between mt-1">
+              <div className="flex justify-between mt-1.5" aria-hidden="true">
                 {[...Array(CYCLES_TO_COMPLETE)].map((_, i) => (
                   <div
                     key={i}
-                    className={`w-2 h-2 rounded-full transition-all ${i < cycleCount ? 'bg-amber-500' : i === cycleCount && isRunning ? 'bg-amber-700 animate-pulse' : 'bg-stone-700'}`}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${i < cycleCount ? 'bg-amber-500' : i === cycleCount && isRunning ? 'bg-amber-700 animate-pulse' : 'bg-stone-700'}`}
                   />
                 ))}
               </div>
             </div>
-          </div>
+          </footer>
         </div>
       );
     }

@@ -9,6 +9,7 @@
   "orientation": "portrait",
   "background_color": "#0c0a09",
   "theme_color": "#0c0a09",
+  "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     {
       "src": "icon-192.svg",
@@ -21,6 +22,29 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Box Breathing (4-4-4-4)",
+      "short_name": "Box",
+      "description": "Start a box breathing session",
+      "url": "./?pattern=box&autostart=true",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "4-7-8 Relaxation",
+      "short_name": "4-7-8",
+      "description": "Start a relaxing 4-7-8 breathing session",
+      "url": "./?pattern=relaxing&autostart=true",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Quick Calm (5-5-5-5)",
+      "short_name": "Calm",
+      "description": "Start a calming breathing session",
+      "url": "./?pattern=calm&autostart=true",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192" }]
     }
   ]
 }
