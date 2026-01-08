@@ -27,15 +27,33 @@
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
     }
-    @keyframes particleFloat {
-      0%, 100% { transform: translate(-50%, -50%) translateY(0px) translateX(0px); }
-      25% { transform: translate(-50%, -50%) translateY(-6px) translateX(4px); }
-      50% { transform: translate(-50%, -50%) translateY(-2px) translateX(-2px); }
-      75% { transform: translate(-50%, -50%) translateY(-8px) translateX(-4px); }
+    /* Wave grid splash screen */
+    .wave-container {
+      perspective: 800px;
     }
-    @keyframes particlePulse {
-      0%, 100% { opacity: 0.9; box-shadow: 0 0 12px #d97706, 0 0 4px #fbbf24; }
-      50% { opacity: 1; box-shadow: 0 0 20px #d97706, 0 0 10px #fbbf24; }
+    .wave-grid {
+      display: grid;
+      transform-style: preserve-3d;
+    }
+    .wave-dot {
+      border-radius: 50%;
+      transform-style: preserve-3d;
+    }
+    .wave-dot.today::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180%;
+      height: 180%;
+      border: 1.5px solid rgba(255, 215, 0, 0.6);
+      border-radius: 50%;
+      animation: today-pulse 1.5s ease-out infinite;
+    }
+    @keyframes today-pulse {
+      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
     }
     /* Reduced motion support */
     @media (prefers-reduced-motion: reduce) {
@@ -300,62 +318,38 @@
       return days;
     };
 
-    const Particle = ({ completed, missed, isToday, delay, index }) => {
-      const size = completed ? 8 : missed ? 4 : 6;
-      const baseOpacity = completed ? 0.9 : missed ? 0.2 : 0.4;
-      
-      return (
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: `${size}px`,
-            height: `${size}px`,
-            backgroundColor: completed ? '#d97706' : missed ? '#44403c' : '#78350f',
-            opacity: baseOpacity,
-            boxShadow: completed ? '0 0 12px #d97706, 0 0 4px #fbbf24' : 'none',
-            animation: `particleFloat ${3 + (index % 3)}s ease-in-out infinite ${delay}s${completed ? `, particlePulse ${2 + (index % 2)}s ease-in-out infinite ${delay * 0.5}s` : ''}`,
-            border: isToday ? '2px solid #fbbf24' : 'none',
-          }}
-        />
-      );
+    // Helper to get day of year (1-365)
+    const getDayOfYear = (date) => {
+      const start = new Date(date.getFullYear(), 0, 0);
+      const diff = date - start;
+      const oneDay = 1000 * 60 * 60 * 24;
+      return Math.floor(diff / oneDay);
     };
 
     const SplashScreen = ({ history, onComplete }) => {
-      const [progress, setProgress] = useState(0);
-      const days = useMemo(() => getLastNDays(365), []);
-      const today = getDateKey();
+      const containerRef = useRef(null);
+      const gridRef = useRef(null);
+      const dotsRef = useRef([]);
+      const timeRef = useRef(0);
+      const animationRef = useRef(null);
+      const [gridConfig, setGridConfig] = useState({ cols: 20, dotSize: 10, gap: 5 });
 
-      useEffect(() => {
-        const duration = 5000;
-        const interval = 50;
-        const increment = (interval / duration) * 100;
-        
-        const timer = setInterval(() => {
-          setProgress(prev => {
-            if (prev >= 100) {
-              clearInterval(timer);
-              onComplete();
-              return 100;
-            }
-            return prev + increment;
-          });
-        }, interval);
+      const today = new Date();
+      const todayDayOfYear = getDayOfYear(today);
+      const todayKey = getDateKey();
 
-        return () => clearInterval(timer);
-      }, [onComplete]);
-
+      // Calculate stats
       const stats = useMemo(() => {
         let completed = 0;
         let streak = 0;
-        
         let countingStreak = true;
-        
+
         for (let i = 0; i < 365; i++) {
           const date = new Date();
           date.setDate(date.getDate() - i);
           const key = getDateKey(date);
           const cycles = history[key] || 0;
-          
+
           if (cycles >= CYCLES_TO_COMPLETE) {
             completed++;
             if (countingStreak) streak++;
@@ -363,105 +357,213 @@
             countingStreak = false;
           }
         }
-        
+
         return { completed, streak };
       }, [history]);
 
-      const particles = useMemo(() => {
-        return days.map((dateKey, i) => {
-          const angle = (i / days.length) * Math.PI * 12 + Math.random() * 0.5;
-          const radius = 20 + (i / days.length) * 35 + Math.random() * 10;
-          
-          const x = 50 + Math.cos(angle) * radius;
-          const y = 50 + Math.sin(angle) * radius;
-          
+      // Build dots data
+      const dotsData = useMemo(() => {
+        return Array.from({ length: 365 }, (_, i) => {
+          const dayNumber = i + 1;
+          const date = new Date(today.getFullYear(), 0, dayNumber);
+          const dateKey = getDateKey(date);
           const cycles = history[dateKey] || 0;
-          const isCompleted = cycles >= CYCLES_TO_COMPLETE;
-          const isMissed = !isCompleted && dateKey !== today;
-          const isTodayDate = dateKey === today;
-          
+
           return {
-            dateKey,
-            x: Math.max(5, Math.min(95, x)),
-            y: Math.max(5, Math.min(95, y)),
-            completed: isCompleted,
-            missed: isMissed,
-            isToday: isTodayDate,
-            delay: (i % 30) * 0.1,
+            index: i,
+            dayNumber,
+            isToday: dayNumber === todayDayOfYear,
+            isCompleted: cycles >= CYCLES_TO_COMPLETE,
+            isFuture: dayNumber > todayDayOfYear,
             cycles
           };
         });
-      }, [days, history, today]);
+      }, [history, todayDayOfYear, today]);
+
+      // Calculate grid dimensions - matching original 365-wave.html
+      const calculateGrid = useCallback(() => {
+        if (!containerRef.current) return;
+        const w = containerRef.current.clientWidth - 32;
+        const h = containerRef.current.clientHeight - 32;
+
+        let bestCols = 10;
+        let bestSize = 0;
+
+        for (let c = 8; c <= 40; c++) {
+          const r = Math.ceil(365 / c);
+          const gapRatio = 0.5;
+          const cellSize = Math.min(w / c, h / r);
+          const size = cellSize / (1 + gapRatio);
+
+          if (size > bestSize && size > 4 && size < 30) {
+            bestSize = size;
+            bestCols = c;
+          }
+        }
+
+        const dotSize = Math.floor(bestSize);
+        const gap = Math.floor(dotSize * 0.5);
+        setGridConfig({ cols: bestCols, dotSize, gap });
+      }, []);
+
+      // Setup and resize
+      useEffect(() => {
+        calculateGrid();
+        window.addEventListener('resize', calculateGrid);
+        return () => window.removeEventListener('resize', calculateGrid);
+      }, [calculateGrid]);
+
+      // Wave animation - following original 365-wave.html design
+      useEffect(() => {
+        const waveSpeed = 0.025;
+        const waveAmplitude = 18;
+        const waveFrequencyX = 0.15;
+        const waveFrequencyY = 0.2;
+
+        const animate = () => {
+          timeRef.current += waveSpeed;
+
+          dotsRef.current.forEach((dotEl, index) => {
+            if (!dotEl) return;
+            const dot = dotsData[index];
+            const row = Math.floor(index / gridConfig.cols);
+            const col = index % gridConfig.cols;
+
+            // Same wave calculation for ALL dots
+            const wave1 = Math.sin(col * waveFrequencyX + timeRef.current) * waveAmplitude;
+            const wave2 = Math.sin(row * waveFrequencyY + timeRef.current * 0.7) * (waveAmplitude * 0.5);
+            const wave3 = Math.sin((col + row) * 0.1 + timeRef.current * 1.3) * (waveAmplitude * 0.3);
+
+            const z = wave1 + wave2 + wave3;
+            const scale = 1 + (z / 150);
+            const brightness = 0.5 + (z + waveAmplitude * 2) / (waveAmplitude * 8);
+
+            // Same transform for all dots - unified wave motion
+            dotEl.style.transform = `translateZ(${z}px) scale(${scale})`;
+
+            if (dot.isToday) {
+              // Gold highlight for today
+              dotEl.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 235, 150, 0.95), rgba(255, 200, 50, 0.8))';
+              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.4}px rgba(255, 215, 0, 0.4)`;
+              dotEl.style.opacity = '0.9';
+            } else if (dot.isCompleted) {
+              // Warm amber for completed days
+              const hue = 35 + Math.sin(timeRef.current + row * 0.1) * 10;
+              const saturation = 70 + z * 0.3;
+              const lightness = 55 + z * 0.4;
+              dotEl.style.background = `radial-gradient(circle at 30% 30%,
+                hsla(${hue}, ${saturation}%, ${lightness + 15}%, ${0.6 + brightness * 0.3}),
+                hsla(${hue}, ${saturation + 10}%, ${lightness - 5}%, ${0.4 + brightness * 0.3}))`;
+              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.3}px hsla(${hue}, 70%, 60%, ${brightness * 0.3})`;
+              dotEl.style.opacity = `${0.5 + brightness * 0.4}`;
+            } else if (dot.isFuture) {
+              // Dim muted colors for future days
+              const hue = 220 + (col / gridConfig.cols) * 20;
+              const saturation = 15 + z * 0.1;
+              const lightness = 35 + z * 0.2;
+              dotEl.style.background = `radial-gradient(circle at 30% 30%,
+                hsla(${hue}, ${saturation}%, ${lightness + 10}%, ${0.25 + brightness * 0.1}),
+                hsla(${hue}, ${saturation + 5}%, ${lightness - 5}%, ${0.15 + brightness * 0.1}))`;
+              dotEl.style.boxShadow = 'none';
+              dotEl.style.opacity = `${0.25 + brightness * 0.15}`;
+            } else {
+              // Teal wave colors for missed past days
+              const hue = 170 + (col / gridConfig.cols) * 30 + Math.sin(timeRef.current + row * 0.1) * 15;
+              const saturation = 50 + z * 0.3;
+              const lightness = 60 + z * 0.4;
+              dotEl.style.background = `radial-gradient(circle at 30% 30%,
+                hsla(${hue}, ${saturation}%, ${lightness + 15}%, ${0.6 + brightness * 0.3}),
+                hsla(${hue}, ${saturation + 10}%, ${lightness - 5}%, ${0.4 + brightness * 0.3}))`;
+              dotEl.style.boxShadow = `0 0 ${gridConfig.dotSize * 0.3}px hsla(${hue}, 70%, 60%, ${brightness * 0.3})`;
+              dotEl.style.opacity = `${0.5 + brightness * 0.4}`;
+            }
+          });
+
+          animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animate();
+        return () => {
+          if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        };
+      }, [dotsData, gridConfig]);
+
+      // Auto-complete timer
+      useEffect(() => {
+        const timer = setTimeout(onComplete, 5000);
+        return () => clearTimeout(timer);
+      }, [onComplete]);
+
+      const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
       return (
-        <div 
-          className="fixed inset-0 bg-stone-950 z-50 flex flex-col items-center justify-center cursor-pointer"
+        <div
+          className="fixed inset-0 z-50 flex flex-col cursor-pointer"
+          style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
           onClick={onComplete}
         >
-          <div className="absolute inset-0 overflow-hidden">
-            <div 
-              className="absolute inset-0 opacity-20"
-              style={{ background: 'radial-gradient(ellipse at 50% 50%, #d97706 0%, transparent 60%)' }}
-            />
-            
-            {particles.map((p, i) => (
-              <div
-                key={p.dateKey}
-                className="absolute"
-                style={{ left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)' }}
-              >
-                <Particle
-                  completed={p.completed}
-                  missed={p.missed}
-                  isToday={p.isToday}
-                  delay={p.delay}
-                  index={i}
+          <header className="p-4 text-center flex-shrink-0">
+            <h1 className="text-xl font-light tracking-widest text-white/80">365 DAYS</h1>
+            <p className="text-white/50 text-xs mt-1">
+              Day {todayDayOfYear} - {today.toLocaleDateString('en-US', dateOptions)}
+            </p>
+          </header>
+
+          <div ref={containerRef} className="flex-1 flex justify-center items-center p-4 overflow-hidden wave-container">
+            <div
+              ref={gridRef}
+              className="wave-grid"
+              style={{
+                gridTemplateColumns: `repeat(${gridConfig.cols}, ${gridConfig.dotSize}px)`,
+                gap: `${gridConfig.gap}px`
+              }}
+            >
+              {dotsData.map((dot, i) => (
+                <div
+                  key={i}
+                  ref={el => dotsRef.current[i] = el}
+                  className={`wave-dot ${dot.isToday ? 'today' : ''}`}
+                  style={{
+                    width: `${gridConfig.dotSize}px`,
+                    height: `${gridConfig.dotSize}px`,
+                    position: 'relative'
+                  }}
                 />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
-          <div className="relative z-10 text-center px-8">
-            <h1 className="text-3xl font-light tracking-widest text-amber-200/90 mb-2">
-              TACTICAL BREATHING
-            </h1>
-            <p className="text-amber-200/40 text-sm mb-12">Your year of breath</p>
-
-            <div className="flex justify-center gap-12 mb-12">
+          <footer className="p-4 text-center flex-shrink-0">
+            <div className="flex justify-center gap-8 mb-3">
               <div className="text-center">
-                <div className="text-4xl text-amber-400 font-light">{stats.streak}</div>
-                <div className="text-xs text-amber-200/40 uppercase tracking-wider mt-1">Day Streak</div>
+                <div className="text-2xl text-amber-400 font-light">{stats.streak}</div>
+                <div className="text-xs text-white/40 uppercase tracking-wider">Streak</div>
               </div>
               <div className="text-center">
-                <div className="text-4xl text-amber-400 font-light">{stats.completed}</div>
-                <div className="text-xs text-amber-200/40 uppercase tracking-wider mt-1">Days Complete</div>
+                <div className="text-2xl text-amber-400 font-light">{stats.completed}</div>
+                <div className="text-xs text-white/40 uppercase tracking-wider">Complete</div>
               </div>
             </div>
-
-            <div className="flex items-center justify-center gap-6 mb-8 text-xs text-amber-200/40">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-600 shadow-lg shadow-amber-600/50" />
-                <span>Completed</span>
+            <div className="flex items-center justify-center gap-3 text-xs text-white/40">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <span>Done</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-1 rounded-full bg-stone-600" />
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ background: 'hsl(185, 50%, 60%)' }} />
                 <span>Missed</span>
               </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-slate-600/40" />
+                <span>Future</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full border border-amber-400 bg-amber-400/80" style={{ boxShadow: '0 0 4px rgba(255,215,0,0.5)' }} />
+                <span>Today</span>
+              </div>
             </div>
-
-            <p className="text-amber-200/30 text-sm animate-pulse">
-              Tap anywhere to begin
-            </p>
-          </div>
-
-          <div className="absolute bottom-8 left-8 right-8">
-            <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-amber-600/50 transition-all duration-100 ease-linear"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+            <p className="text-white/30 text-xs mt-3 animate-pulse">Tap to begin</p>
+          </footer>
         </div>
       );
     };
