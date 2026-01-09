@@ -51,6 +51,28 @@
       flex-direction: column;
     }
 
+    /* PPG Flashlight - Bright white light to illuminate finger */
+    .ppg-flashlight {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: calc(env(safe-area-inset-top, 60px) * 3);
+      z-index: 9999;
+      pointer-events: none;
+
+      /* BRIGHT WHITE LIGHT */
+      background: linear-gradient(to bottom,
+        #FFFFFF 0%,
+        #FFFFFF 40%,
+        rgba(255,255,255,0.8) 70%,
+        rgba(255,255,255,0) 100%
+      );
+
+      /* Maximum brightness */
+      filter: brightness(1.5);
+    }
+
     /* Camera ring positioned around physical camera cutout */
     .camera-ring {
       position: fixed;
@@ -60,50 +82,34 @@
       z-index: 10000;
       pointer-events: none;
 
-      /* MUCH BIGGER - 2.5x notch height */
+      /* Size based on notch */
       height: calc(env(safe-area-inset-top, 60px) * 2.5);
       width: calc(env(safe-area-inset-top, 60px) * 2.5);
       margin-top: calc(env(safe-area-inset-top, 60px) * 0.05);
 
       border-radius: 50%;
 
-      /* ULTRA BRIGHT RED - Multiple glowing layers */
-      border: 8px solid #FF0000;
-      box-shadow:
-        0 0 40px 12px #FF0000,
-        0 0 80px 20px rgba(255,0,0,0.8),
-        inset 0 0 40px 12px rgba(255,0,0,0.6),
-        0 0 120px 30px rgba(255,0,0,0.5);
-
-      /* Maximum brightness to fight screen dimming */
-      filter: brightness(2.5) saturate(2);
-      animation: camera-ring-pulse 1s ease-in-out infinite;
+      /* Subtle ring indicator */
+      border: 4px solid rgba(255,0,0,0.6);
+      box-shadow: 0 0 20px 5px rgba(255,0,0,0.4);
+      animation: camera-ring-pulse 1.5s ease-in-out infinite;
       transition: all 0.3s ease;
     }
 
     .camera-ring.finger-detected {
-      border-color: #00FF00;
-      border-width: 10px;
-      box-shadow:
-        0 0 50px 15px #00FF00,
-        0 0 100px 25px rgba(0,255,0,0.9),
-        inset 0 0 50px 15px rgba(0,255,0,0.7),
-        0 0 150px 40px rgba(0,255,0,0.6);
-      filter: brightness(3) saturate(2);
+      border-color: rgba(0,255,0,0.8);
+      box-shadow: 0 0 25px 8px rgba(0,255,0,0.5);
       animation: none;
-      transform: translateX(-50%) scale(1.2);
     }
 
     @keyframes camera-ring-pulse {
       0%, 100% {
         transform: translateX(-50%) scale(1);
-        opacity: 1;
-        filter: brightness(2.5) saturate(2);
+        opacity: 0.8;
       }
       50% {
-        transform: translateX(-50%) scale(1.15);
+        transform: translateX(-50%) scale(1.05);
         opacity: 1;
-        filter: brightness(3) saturate(2);
       }
     }
 
@@ -1766,13 +1772,25 @@
         animationFrameRef.current = requestAnimationFrame(analyze);
       };
 
-      // Manage camera ring element
+      // Manage camera ring and flashlight elements
       useEffect(() => {
         if (!isActive) {
-          // Remove ring when inactive
+          // Remove elements when inactive
           const ring = document.getElementById('ppg-camera-ring');
+          const flashlight = document.getElementById('ppg-flashlight');
           if (ring) ring.remove();
+          if (flashlight) flashlight.remove();
           return;
+        }
+
+        // Create or update flashlight (bright white light)
+        let flashlight = document.getElementById('ppg-flashlight');
+        if (!flashlight) {
+          flashlight = document.createElement('div');
+          flashlight.id = 'ppg-flashlight';
+          flashlight.className = 'ppg-flashlight';
+          document.body.appendChild(flashlight);
+          console.log('[PPG] White flashlight activated');
         }
 
         // Create or update ring
@@ -1793,7 +1811,9 @@
 
         return () => {
           const ring = document.getElementById('ppg-camera-ring');
+          const flashlight = document.getElementById('ppg-flashlight');
           if (ring) ring.remove();
+          if (flashlight) flashlight.remove();
         };
       }, [isActive, fingerOn]);
 
@@ -2441,6 +2461,9 @@
       const handleTouchStart = (e) => {
         touchStartY.current = e.touches[0].clientY;
         touchStartTime.current = Date.now();
+
+        // Don't show quick settings during PPG measurements
+        if (ppgEnabled && isRunning) return;
 
         // Start long-press timer (500ms)
         longPressTimer.current = setTimeout(() => {
