@@ -37,6 +37,18 @@
       padding-left: env(safe-area-inset-left, 0px);
       padding-right: env(safe-area-inset-right, 0px);
       padding-bottom: env(safe-area-inset-bottom, 0px);
+
+      /* Prevent screen dimming */
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Ensure all UI elements are always visible */
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Camera ring positioned around physical camera cutout */
@@ -2200,12 +2212,14 @@
         return () => document.removeEventListener('keydown', handleKeyDown);
       }, [showInfo, showSettings, showStats, showCompletion, focusMode, isRunning, completeSession, exitFocusMode, enterFocusMode, reset]);
 
-      // Release wake lock when not running
+      // Keep wake lock active when PPG is running to prevent screen dimming
       useEffect(() => {
-        if (!isRunning && wakeLockRef.current) {
+        if (ppgEnabled && isRunning) {
+          requestWakeLock();
+        } else if (!isRunning && wakeLockRef.current) {
           releaseWakeLock();
         }
-      }, [isRunning, releaseWakeLock]);
+      }, [isRunning, ppgEnabled, requestWakeLock, releaseWakeLock]);
 
       const persistHistory = useCallback((newHistory) => {
         setHistory(newHistory);
@@ -2660,7 +2674,7 @@
             </div>
           )}
 
-          <header className={`text-center w-full transition-opacity duration-300 flex-shrink-0 ${focusMode && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <header className="text-center w-full flex-shrink-0 opacity-100">
             <div className="flex items-center justify-between mb-1 px-1">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowInfo(true); }}
@@ -2754,7 +2768,7 @@
             })}
           </button>
 
-          <footer id="breathing-status" className={`w-full max-w-xs text-center transition-opacity duration-300 flex-shrink-0 ${focusMode && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <footer id="breathing-status" className="w-full max-w-xs text-center flex-shrink-0 opacity-100">
             <p className="text-base text-amber-200/60 mb-0.5" aria-live="polite">{phase.instruction}</p>
             <p className="text-amber-200/30 text-xs mb-2">
               {cycleCount > 0 || isRunning ? (
