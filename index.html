@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0c0a09">
@@ -22,11 +22,64 @@
     }
   </script>
   <style>
+    :root {
+      --notch-height: env(safe-area-inset-top, 0px);
+      --notch-left: env(safe-area-inset-left, 0px);
+      --notch-right: env(safe-area-inset-right, 0px);
+    }
+
     body {
       margin: 0;
       background: #0c0a09;
       overflow: hidden;
       -webkit-tap-highlight-color: transparent;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* Camera ring positioned around physical camera cutout */
+    .camera-ring {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      pointer-events: none;
+
+      /* Size based on notch height */
+      height: calc(env(safe-area-inset-top, 40px) * 0.8);
+      width: calc(env(safe-area-inset-top, 40px) * 0.8);
+      margin-top: calc(env(safe-area-inset-top, 40px) * 0.1);
+
+      border-radius: 50%;
+      border: 3px solid red;
+      box-shadow: 0 0 15px 3px red, inset 0 0 15px 3px rgba(255,0,0,0.3);
+      animation: camera-ring-pulse 1.5s ease-in-out infinite;
+      transition: all 0.3s ease;
+    }
+
+    .camera-ring.finger-detected {
+      border-color: #00ff00;
+      box-shadow: 0 0 20px 4px #00ff00, inset 0 0 20px 4px rgba(0,255,0,0.3);
+      animation: none;
+    }
+
+    @keyframes camera-ring-pulse {
+      0%, 100% {
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: translateX(-50%) scale(1.1);
+        opacity: 0.8;
+      }
+    }
+
+    /* Hide ring if no notch detected */
+    @supports not (padding-top: env(safe-area-inset-top)) {
+      .camera-ring { display: none; }
     }
 
     /* Wave grid splash screen */
@@ -1683,37 +1736,41 @@
         animationFrameRef.current = requestAnimationFrame(analyze);
       };
 
+      // Manage camera ring element
+      useEffect(() => {
+        if (!isActive) {
+          // Remove ring when inactive
+          const ring = document.getElementById('ppg-camera-ring');
+          if (ring) ring.remove();
+          return;
+        }
+
+        // Create or update ring
+        let ring = document.getElementById('ppg-camera-ring');
+        if (!ring) {
+          ring = document.createElement('div');
+          ring.id = 'ppg-camera-ring';
+          ring.className = 'camera-ring';
+          document.body.appendChild(ring);
+        }
+
+        // Update ring state based on finger detection
+        if (fingerOn) {
+          ring.classList.add('finger-detected');
+        } else {
+          ring.classList.remove('finger-detected');
+        }
+
+        return () => {
+          const ring = document.getElementById('ppg-camera-ring');
+          if (ring) ring.remove();
+        };
+      }, [isActive, fingerOn]);
+
       if (!isActive) return null;
 
       return (
-        <>
-          {/* FLOATING CAMERA RING - Shows at top of screen where camera is */}
-          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-            <div className={`relative w-28 h-28 transition-all duration-300 ${fingerOn ? 'scale-110' : 'scale-100'}`}>
-              {/* Outer pulsing ring */}
-              <div className={`absolute inset-0 rounded-full border-8 transition-all duration-300 ${fingerOn ? 'border-green-500 shadow-2xl shadow-green-500/80' : 'border-red-500 shadow-2xl shadow-red-500/80 animate-pulse'}`} />
-
-              {/* Inner ring */}
-              <div className={`absolute inset-3 rounded-full border-4 transition-all ${fingerOn ? 'border-green-400' : 'border-red-400 animate-ping'}`} />
-
-              {/* Center icon */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all ${fingerOn ? 'bg-green-500 shadow-lg' : 'bg-red-500 shadow-lg'} text-white font-bold`}>
-                  {fingerOn ? '✓' : '👆'}
-                </div>
-              </div>
-
-              {/* Status text below */}
-              <div className={`absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-center transition-all`}>
-                <div className={`text-sm font-bold px-3 py-1 rounded-full ${fingerOn ? 'bg-green-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>
-                  {fingerOn ? (calibrating ? 'CALIBRATING...' : 'MEASURING') : 'PLACE FINGER HERE'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Measurements widget at bottom */}
-          <div className="w-full max-w-xs bg-gradient-to-br from-red-900/80 to-orange-800/60 rounded-xl p-4 border-4 border-yellow-500 backdrop-blur-sm shadow-2xl">
+        <div className="w-full max-w-xs bg-gradient-to-br from-red-900/80 to-orange-800/60 rounded-xl p-4 border-4 border-yellow-500 backdrop-blur-sm shadow-2xl">
             {/* Video and canvas */}
             <canvas ref={canvasRef} width="64" height="64" className="hidden" />
 
@@ -1813,9 +1870,36 @@
             </div>
           </div>
         </div>
-        </>
       );
     };
+
+    // ============ NOTCH DETECTION UTILITY ============
+    function getNotchInfo() {
+      const testElement = document.createElement('div');
+      testElement.style.paddingTop = 'env(safe-area-inset-top)';
+      testElement.style.position = 'absolute';
+      testElement.style.visibility = 'hidden';
+      document.body.appendChild(testElement);
+
+      const notchHeight = parseInt(window.getComputedStyle(testElement).paddingTop);
+      document.body.removeChild(testElement);
+
+      return {
+        hasNotch: notchHeight > 0,
+        height: notchHeight
+      };
+    }
+
+    // Log notch detection on load
+    window.addEventListener('load', () => {
+      const notchData = getNotchInfo();
+      if (notchData.hasNotch) {
+        console.log(`[PPG] ✓ Camera notch detected! Height: ${notchData.height}px`);
+        console.log('[PPG] Camera ring will appear around the physical camera');
+      } else {
+        console.log('[PPG] No camera notch detected (standard screen or desktop)');
+      }
+    });
 
     function BreathingApp() {
       // Load initial settings
