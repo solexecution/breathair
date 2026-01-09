@@ -48,32 +48,50 @@
       z-index: 10000;
       pointer-events: none;
 
-      /* Size based on notch height */
-      height: calc(env(safe-area-inset-top, 40px) * 0.8);
-      width: calc(env(safe-area-inset-top, 40px) * 0.8);
-      margin-top: calc(env(safe-area-inset-top, 40px) * 0.1);
+      /* MUCH BIGGER - 2.5x notch height */
+      height: calc(env(safe-area-inset-top, 60px) * 2.5);
+      width: calc(env(safe-area-inset-top, 60px) * 2.5);
+      margin-top: calc(env(safe-area-inset-top, 60px) * 0.05);
 
       border-radius: 50%;
-      border: 3px solid red;
-      box-shadow: 0 0 15px 3px red, inset 0 0 15px 3px rgba(255,0,0,0.3);
-      animation: camera-ring-pulse 1.5s ease-in-out infinite;
+
+      /* ULTRA BRIGHT RED - Multiple glowing layers */
+      border: 8px solid #FF0000;
+      box-shadow:
+        0 0 40px 12px #FF0000,
+        0 0 80px 20px rgba(255,0,0,0.8),
+        inset 0 0 40px 12px rgba(255,0,0,0.6),
+        0 0 120px 30px rgba(255,0,0,0.5);
+
+      /* Maximum brightness to fight screen dimming */
+      filter: brightness(2.5) saturate(2);
+      animation: camera-ring-pulse 1s ease-in-out infinite;
       transition: all 0.3s ease;
     }
 
     .camera-ring.finger-detected {
-      border-color: #00ff00;
-      box-shadow: 0 0 20px 4px #00ff00, inset 0 0 20px 4px rgba(0,255,0,0.3);
+      border-color: #00FF00;
+      border-width: 10px;
+      box-shadow:
+        0 0 50px 15px #00FF00,
+        0 0 100px 25px rgba(0,255,0,0.9),
+        inset 0 0 50px 15px rgba(0,255,0,0.7),
+        0 0 150px 40px rgba(0,255,0,0.6);
+      filter: brightness(3) saturate(2);
       animation: none;
+      transform: translateX(-50%) scale(1.2);
     }
 
     @keyframes camera-ring-pulse {
       0%, 100% {
         transform: translateX(-50%) scale(1);
         opacity: 1;
+        filter: brightness(2.5) saturate(2);
       }
       50% {
-        transform: translateX(-50%) scale(1.1);
-        opacity: 0.8;
+        transform: translateX(-50%) scale(1.15);
+        opacity: 1;
+        filter: brightness(3) saturate(2);
       }
     }
 
@@ -1780,7 +1798,10 @@
               <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
               </svg>
-              🔴 PPG ACTIVE - CAMERA BELOW 🔴
+              🔴 PPG ACTIVE - LOOK AT TOP 🔴
+            </div>
+            <div className="text-yellow-200/60 text-[10px] mt-1">
+              Screen may dim when finger is close - this is normal
             </div>
           </div>
 
