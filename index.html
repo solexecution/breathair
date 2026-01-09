@@ -1619,14 +1619,15 @@
 
       const findPeaks = (signal) => {
         const peaks = [];
-        const threshold = Math.max(...signal.map(Math.abs)) * 0.4;
+        const threshold = Math.max(...signal.map(Math.abs)) * 0.2; // Lower threshold from 0.4 to 0.2
         for (let i = 3; i < signal.length - 3; i++) {
           if (signal[i] > threshold &&
               signal[i] >= signal[i-1] && signal[i] >= signal[i-2] &&
               signal[i] >= signal[i+1] && signal[i] >= signal[i+2]) {
-            if (!peaks.length || i - peaks[peaks.length-1] > 9) peaks.push(i);
+            if (!peaks.length || i - peaks[peaks.length-1] > 7) peaks.push(i); // Allow closer peaks
           }
         }
+        console.log('[PPG] Found', peaks.length, 'peaks, threshold:', threshold.toFixed(2));
         return peaks;
       };
 
@@ -1642,17 +1643,25 @@
         const filtered = bandpass(reds);
         const peaks = findPeaks(filtered);
 
-        if (peaks.length < 3) return null;
+        if (peaks.length < 2) {
+          console.log('[PPG] Not enough peaks:', peaks.length, '- need at least 2');
+          return null;
+        }
 
         const intervals = [];
         for (let i = 1; i < peaks.length; i++) {
           const dt = samplesRef.current[peaks[i]].t - samplesRef.current[peaks[i-1]].t;
-          if (dt > 300 && dt < 1500) intervals.push(dt);
+          if (dt > 250 && dt < 2000) intervals.push(dt); // More lenient: 250-2000ms instead of 300-1500ms
         }
 
-        if (intervals.length < 2) return null;
+        console.log('[PPG] Valid intervals:', intervals.length, 'from', peaks.length, 'peaks');
+
+        if (intervals.length < 1) return null;
         intervals.sort((a, b) => a - b);
-        return Math.round(60000 / intervals[Math.floor(intervals.length / 2)]);
+        const medianInterval = intervals[Math.floor(intervals.length / 2)];
+        const hr = Math.round(60000 / medianInterval);
+        console.log('[PPG] Calculated HR:', hr, 'bpm (from interval', medianInterval.toFixed(0), 'ms)');
+        return hr;
       };
 
       const estimateSpO2 = () => {
@@ -1750,20 +1759,28 @@
               const quality = getSignalQuality();
               setSignalQuality(quality);
 
-              if (quality > 15) {
+              console.log('[PPG] Quality:', quality, '- Attempting measurement...');
+
+              // Try to calculate even with low quality
+              if (quality > 5) {
                 const hr = calculateHR();
                 const oxygen = estimateSpO2();
+
+                console.log('[PPG] Raw results - HR:', hr, 'SpO2:', oxygen);
+
                 setHeartRate(hr);
                 setSpO2(oxygen);
 
                 // Log measurements occasionally
-                if (hr && oxygen && Math.random() < 0.1) {
-                  console.log('[PPG] Measurement - HR:', hr, 'bpm, SpO2:', oxygen, '%, Quality:', quality);
+                if (hr && oxygen && Math.random() < 0.3) {
+                  console.log('[PPG] ✓ Measurement - HR:', hr, 'bpm, SpO2:', oxygen, '%, Quality:', quality);
                 }
 
                 if (onReading) {
                   onReading({ fingerOn: fingerDetected, hr, spo2: oxygen, quality });
                 }
+              } else {
+                console.log('[PPG] Quality too low:', quality, '- Need > 5');
               }
             }
           }
